@@ -1,0 +1,12 @@
+SELECT     LEFT(documents.docfilename, LEN(documents.docfilename) - 4) AS sirnbr, inspectionreportdetails.iresultsid, iresults.inspectiondate, iresults.phase, 
+                      inspectioncodes.tradename, iresults.lot, iresults.unit, inspectionreportdetails.sdate, inspectionreportreminders.reminder, documents.documentid
+FROM         inspectionreportdetails INNER JOIN
+                      iresults ON inspectionreportdetails.projectid = iresults.projectid AND inspectionreportdetails.iresultsid = iresults.iresultsid INNER JOIN
+                      inspectioncodes ON iresults.code = inspectioncodes.code INNER JOIN
+                      documents ON inspectionreportdetails.documentid = documents.documentid LEFT OUTER JOIN
+                      inspectionreportreminders ON inspectionreportdetails.documentid = inspectionreportreminders.documentid AND 
+                      inspectionreportdetails.projectid = inspectionreportreminders.projectid AND 
+                      inspectionreportdetails.iresultsid = inspectionreportreminders.iresultsid
+WHERE     (documents.projectid = 37)
+ORDER BY inspectionreportdetails.sdate, LEFT(documents.docfilename, LEN(documents.docfilename) - 4), inspectionreportdetails.iresultsid, 
+                      inspectionreportreminders.reminder

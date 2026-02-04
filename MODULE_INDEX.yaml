@@ -1,0 +1,31 @@
+generated: "2025-11-12T00:06:00-08:00"
+modules:
+  grande_library:
+    root: "D:\\SYZYGY\\Grande_Library\\"
+    chatlogs: "D:\\SYZYGY\\Grande_Library\\ChatLogs\\"
+    patterns: "D:\\SYZYGY\\Grande_Library\\Patterns\\"
+    resonances: "D:\\SYZYGY\\Grande_Library\\Resonances\\"
+    hypothesis: "D:\\SYZYGY\\Grande_Library\\Hypothesis\\"
+    logs: "D:\\SYZYGY\\Grande_Library\\Logs\\"
+    knowledge_map: "D:\\SYZYGY\\Grande_Library\\Knowledge_Map.png"
+    db_sqlite: "D:\\SYZYGY\\Grande_Library\\ChatLogs\\GrandLibrary.sqlite"
+    book_of_choice: "D:\\SYZYGY\\Grande_Library\\ChatLogs\\BookOfChoice.txt"
+  artifacts:
+    root: "D:\\SYZYGY\\Artifacts\\"
+    audio_video_media: "D:\\SYZYGY\\Artifacts\\audio_video_media\\"
+    text_library: "D:\\SYZYGY\\Artifacts\\text_library\\"
+    unified: "D:\\SYZYGY\\Artifacts\\unified\\"
+    uncategorized: "D:\\SYZYGY\\Artifacts\\uncategorized\\"
+    visual_assets: "D:\\SYZYGY\\Artifacts\\visual_assets\\"
+  import:
+    redeemer_payload: "D:\\SYZYGY\\import\\redeemer_payload\\"
+  scripts:
+    megazord: "D:\\SYZYGY\\Megazord.py"
+    build_grandlibrary: "D:\\SYZYGY\\BuildGrandLibrary.py"
+    ingest_universal: "D:\\SYZYGY\\Ingest_Universal.py"
+    grande: "D:\\SYZYGY\\Grande.py"
+policies:
+  protocol: "SWORD_OF_SEE_V1"
+  dedupe: "sha256 + logical key (path + size + mtime)"
+  audio_transcription: "whisper_local"
+  translation_targets: ["es","zh","ja","ko","ar","he"]

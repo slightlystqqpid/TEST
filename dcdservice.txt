@@ -1,0 +1,4707 @@
+Imports System.Web.Services
+Imports System.Data.SqlClient
+
+<WebService(Namespace:="http://www.virtualconstruction.net/dcdservice/dcdservice.asmx")> _
+Public Class DCDService
+    Inherits System.Web.Services.WebService
+
+    'version dated 9/23/03
+
+#Region " Variables "
+
+    Protected pass As String = "DCD3eRdtM89ja"
+    Protected dt As String = Now.Today.ToShortDateString
+    Protected strg As String = "2qLtv" & dt & "Z61"
+    Protected SqlConn As SqlConnection
+    Protected sqlDr As SqlDataReader
+    Protected sqlCmd As SqlCommand
+    Protected ds1 As String = "data source=192.168.1.30, 1091;"
+    Protected ds2 As String = "data source=192.168.1.30, 1091;"
+    Protected dbvcnet As String = "database=vcnet;uid=test;pwd="
+    Protected dbdcd As String = "database=dcdvcnet;uid=test;pwd="
+    Protected strVcnetConn As String = "1"
+    Protected strDcdConn As String = "1"
+    Protected x As String = Nothing
+
+#End Region
+
+#Region " Web Services Designer Generated Code "
+
+    Public Sub New()
+        MyBase.New()
+
+        'This call is required by the Web Services Designer.
+        InitializeComponent()
+
+        'Add your own initialization code after the InitializeComponent() call
+        x = Crypt(pass, strg)
+        dbvcnet = dbvcnet & x
+        Call GetVcnetConn()
+        dbdcd = dbdcd & x
+        Call GetDcdConn()
+        strVcnetConn = strVcnetConn & dbvcnet
+        strDcdConn = strDcdConn & dbdcd
+        Dim IP As String = GetIP()
+        Dim tstSecurityIP As Boolean = ValidateIP(IP)
+        If Not tstSecurityIP Then
+            'Throw New Exception("Access is Denied")
+        End If
+
+    End Sub
+
+    'Required by the Web Services Designer
+    Private components As System.ComponentModel.IContainer
+
+    'NOTE: The following procedure is required by the Web Services Designer
+    'It can be modified using the Web Services Designer.  
+    'Do not modify it using the code editor.
+    <System.Diagnostics.DebuggerStepThrough()> Private Sub InitializeComponent()
+
+    End Sub
+
+    Protected Overloads Overrides Sub Dispose(ByVal disposing As Boolean)
+        'CODEGEN: This procedure is required by the Web Services Designer
+        'Do not modify it using the code editor.
+        If disposing Then
+            If Not (components Is Nothing) Then
+                components.Dispose()
+            End If
+        End If
+        MyBase.Dispose(disposing)
+    End Sub
+
+#End Region
+
+#Region " Connection "
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:9/13/02                  
+    '   Modified Date:                          
+    '   Gets Clients ip
+    '   THIS WORKS!!!!!!!!!!!!!         
+    '************************************************************************
+
+    <WebMethod()> Public Function GetIP() As String
+
+        Dim request As System.Web.HttpRequest
+        Dim ClientIP As String
+        ClientIP = Context.Request.UserHostAddress.ToString
+        Return ClientIP
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:9/13/02                  
+    '   Modified Date:                          
+    '   Used to validate ips
+    '************************************************************************
+
+    <WebMethod()> Private Function ValidateIP(ByVal ip As String) As Boolean
+
+        'need to check ip table for valid ips
+        If Left(ip, 12) = "66.63.143.23" Or Left(ip, 11) = "192.168.1." Or Left(ip, 9) = "127.0.0.1" Or Left(ip, 9) = "206.111.248" Or Left(ip, 9) = "64.105.40" Then
+            Return True
+        Else
+            Return False
+        End If
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   Used to test connection of webservice    
+    '************************************************************************
+
+    <WebMethod()> Public Function tstService() As Boolean
+
+        Return True
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   Used to crypt password for connect string
+    '************************************************************************
+
+    Private Function Crypt(ByRef pass As String, ByRef Strg As String) As String
+
+        Dim b As Integer
+        Dim j As String
+        Dim h As String
+        Dim i As Integer
+        Dim a As Integer
+        Dim tmp1 As String
+        Dim tmp2 As String
+
+        a = 1
+
+        For i = 1 To Len(Strg)
+            b = Asc(Mid(pass, a, 1))
+            a = a + 1
+            If a > Len(pass) Then a = 1
+            tmp1 = Chr(Asc(Mid(Strg, i, 1)) Xor b)
+            tmp2 = tmp2 & tmp1
+        Next
+
+        Strg = tmp2
+        h = ""
+
+        For i = 1 To Len(Strg)
+            j = Hex(Asc(Mid(Strg, i, 1)))
+            If Len(j) = 1 Then j = "0" & j
+            h = h & j
+        Next
+
+        Return h
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   test connection of db if fail test other db
+    '************************************************************************
+
+    <WebMethod()> Private Function GetVcnetConn() As Boolean
+
+        Dim tst As Boolean
+        tst = TstConn(ds1, dbvcnet)
+
+        If tst Then
+            strVcnetConn = ds1
+            Return True
+        Else
+            tst = TstConn(ds2, dbvcnet)
+            If tst Then
+                strVcnetConn = ds2
+                Return True
+            Else
+                'all failed add new database connections here
+                strVcnetConn = "FAILED"
+                Return False
+            End If
+        End If
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   test connection of db if fail test other db      
+    '************************************************************************
+
+    <WebMethod()> Private Function GetDcdConn() As Boolean
+
+        Dim tst As Boolean
+        tst = TstConn(ds1, dbdcd)
+
+        If tst Then
+            strDcdConn = ds1
+            Return True
+        Else
+            tst = TstConn(ds2, dbdcd)
+            If tst Then
+                strDcdConn = ds2
+                Return True
+            Else
+                'all failed add new database connections here
+                strDcdConn = "FAILED"
+                Return False
+            End If
+        End If
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   Test the connection of the database
+    '************************************************************************
+
+    <WebMethod()> Private Function TstConn(ByVal ds As String, ByVal db As String) As Boolean
+
+        Dim strConnect As String = ds & db
+        Dim SqlConn As New SqlConnection(strConnect)
+
+        Try
+            Dim sqlCmd As New SqlCommand("SELECT [connect] FROM tstConnect", SqlConn)
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+            SqlConn.Close()
+
+            Return True
+
+        Catch ex As SqlException
+            Return False
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: Patricia Kline            
+    '   Created Date: 8/27/02                 
+    '   Modified Date:                          
+    '   Event:  Login 
+    '************************************************************************
+
+    <WebMethod()> Public Function vcLogin(ByVal user As String, ByVal pass As String) As String()
+
+        Dim result(2) As String
+        Dim sqlStr As String
+        sqlStr = "SELECT peopleid, mgmt, it " & _
+                    "FROM users " & _
+                    "WHERE username = '" & LCase(user) & "' " & _
+                    "AND password = '" & LCase(pass) & "'"
+
+        Try
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim sqlCmd As New SqlCommand(sqlStr, SqlConn)
+
+            Dim sqlDr As SqlDataReader
+            Dim peopleid As Integer = 0
+
+            result(0) = ""
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlDr = sqlCmd.ExecuteReader
+
+            While sqlDr.Read
+                result(0) = sqlDr.GetValue(0).ToString
+                result(1) = sqlDr.GetValue(1).ToString
+                result(2) = sqlDr.GetValue(2).ToString
+            End While
+
+            If result(0) = "" Then
+                result(0) = "Error"
+                result(1) = "0"
+                result(2) = "Invalid User or Password!"
+            Else
+                peopleid = result(0)
+                'updateLogin(peopleid)
+            End If
+
+            Return result
+
+        Catch ex As SqlException
+            result(0) = "Error"
+            result(1) = ex.Number
+            result(2) = ex.Message
+
+            Return result
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: Patricia Kline            
+    '   Created Date: 8/27/02                 
+    '   Modified Date:                          
+    '   Event:  Login 
+    '************************************************************************
+
+    <WebMethod()> Public Function GetCallCounts(ByVal User As String) As String()
+
+        Dim result(1) As String
+        Dim sqlStr As String
+        sqlStr = "SELECT onhold, count(*) " & _
+                    "FROM calls " & _
+                    "WHERE queue = '" & LCase(User) & "' " & _
+                    "AND closed = 0 " & _
+                    "GROUP BY onhold "
+
+        Try
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim sqlCmd As New SqlCommand(sqlStr, SqlConn)
+
+            Dim sqlDr As SqlDataReader
+
+            result(0) = "0"
+            result(1) = "0"
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlDr = sqlCmd.ExecuteReader
+
+            While sqlDr.Read
+                If sqlDr.GetValue(0) = 0 Then
+                    result(0) = sqlDr.GetValue(1).ToString
+                Else
+                    result(1) = sqlDr.GetValue(1).ToString
+                End If
+            End While
+
+            Return result
+
+        Catch ex As SqlException
+            ReDim result(2)
+            result(0) = "Error"
+            result(1) = ex.Number
+            result(2) = ex.Message
+
+            Return result
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   updates last login date for user
+    '************************************************************************
+
+    <WebMethod()> Public Function updateLogin(ByVal peopleid As Integer) As String
+
+        Try
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim SqlCmd As New SqlCommand("UPDATE users set lastlogindate= getdate() WHERE peopleid = " & peopleid, SqlConn)
+            Dim SqlDr As SqlDataReader
+
+            If Not SqlConn.State = ConnectionState.Open Then
+                SqlConn.Open()
+            End If
+
+            SqlCmd.ExecuteNonQuery()
+            If Not SqlConn.State = ConnectionState.Closed Then
+                SqlConn.Close()
+            End If
+
+            Dim IP As String = GetIP()
+            Dim SqlCmd1 As New SqlCommand("INSERT INTO usersips (peopleid, ip) VALUES (" & peopleid & ",'" & IP & "')", SqlConn)
+            If Not SqlConn.State = ConnectionState.Open Then
+                SqlConn.Open()
+            End If
+
+            SqlCmd1.ExecuteNonQuery()
+            If Not SqlConn.State = ConnectionState.Closed Then
+                SqlConn.Close()
+            End If
+
+            Return True
+
+        Catch ex As SqlException
+            Return False
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Barcodelist "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get document catetories and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetDocCategories() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT documentscategory FROM documentcategories ORDER BY documentscategory"
+
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get document catetories and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetSubCategories(ByVal category As String) As DataSet
+
+        Dim ds As New DataSet()
+        Dim sqlstmt As String
+
+        sqlstmt = "SELECT subcategory FROM subcategories " & _
+                    "WHERE category = '" & category & "' " & _
+                    "ORDER BY subcategory"
+
+        Try
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get barcodelist for Project selected
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetBarcodelist(ByVal projid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT documents.documentid, documents.docfilename, documents.documentcategory, documnetsubcategories.subcategory, " & _
+                    "documentdates.documentdate, documenttitles.title, documentauthors.companyid as authorid, vcnet.dbo.companies.name AS author, plans.pagenbr, details.detailnbr, " & _
+                    "documentplantypes.plantype, documentphases.phase, documentlots.lot, documentbldgs.bldg, documentunits.unit, vcnet.dbo.homes.address, documents.peopleid " & _
+                "FROM documentplantypes RIGHT OUTER JOIN " & _
+                      "plans ON documentplantypes.documentid = plans.documentid AND documentplantypes.pagenbr = plans.pagenbr LEFT OUTER JOIN " & _
+                      "details ON plans.documentid = details.documentid AND plans.pagenbr = details.pagenbr RIGHT OUTER JOIN " & _
+                      "documentunits RIGHT OUTER JOIN " & _
+                      "companies INNER JOIN " & _
+                      "documentauthors ON companies.companyid = documentauthors.companyid RIGHT OUTER JOIN " & _
+                      "documentphases RIGHT OUTER JOIN " & _
+                      "documents LEFT OUTER JOIN " & _
+                      "documnetsubcategories ON documents.documentid = documnetsubcategories.documentid LEFT OUTER JOIN " & _
+                      "documentbldgs ON documents.documentid = documentbldgs.documentid ON documentphases.documentid = documents.documentid ON  " & _
+                      "documentauthors.documentid = documents.documentid ON documentunits.documentid = documents.documentid LEFT OUTER JOIN " & _
+                      "homes INNER JOIN " & _
+                      "documenthomes ON homes.houseid = documenthomes.houseid ON documents.documentid = documenthomes.documentid LEFT OUTER JOIN " & _
+                      "documenttitles ON documents.documentid = documenttitles.documentid LEFT OUTER JOIN " & _
+                      "documentlots ON documents.documentid = documentlots.documentid LEFT OUTER JOIN " & _
+                      "documentdates ON documents.documentid = documentdates.documentid ON plans.documentid = documents.documentid " & _
+                "WHERE documents.projectid = " & projid & " " & _
+                "ORDER BY documents.documentid"
+
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Check and Add document if not already in database and return docid
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddDocument(ByVal projid As Integer, ByVal filename As String, ByVal category As String, ByVal pplid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim docid As Integer = 0
+        Dim sqlstmt As String
+        Dim strcat As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documents " & _
+             "WHERE projectid = " & projid & " " & _
+              "AND docfilename = '" & filename & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then 'add document if not already in database
+                sqlstmt = LCase("INSERT INTO documents (projectid, docfilename, documentcategory, peopleid)  " & _
+                    "VALUES (" & projid & ", '" & filename & "', '" & category & "', " & pplid & ")")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+                strcat = category
+            Else 'check if document category
+                sqlstmt = "SELECT documentcategory FROM documents " & _
+                 "WHERE projectid = " & projid & " " & _
+                  "AND docfilename = '" & filename & "'"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                strcat = sqlCmd2.ExecuteScalar.ToString
+            End If
+
+            If strcat = category Then 'get documentid 
+                sqlstmt = "SELECT documentid FROM documents " & _
+                 "WHERE projectid = " & projid & " " & _
+                  "AND docfilename = '" & filename & "'"
+
+                Dim sqlCmd3 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd3.CommandType = CommandType.Text
+                docid = CInt(sqlCmd3.ExecuteScalar.ToString)
+
+                Return docid.ToString
+            Else
+                Return "Dup"
+            End If
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Check and Add document if not already in database and return docid
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddDocumentInspectionCat(ByVal docid As Integer, ByVal cat As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documnetsubcategories " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND subcategory = '" & cat & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO documnetsubcategories (documentid, subcategory)  " & _
+                                    "VALUES (" & docid & ", '" & cat & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Check and Add document if not already in database and return docid
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddDocumentDate(ByVal docid As Integer, ByVal docdate As Date) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documentdates " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND documentdate = '" & docdate & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO documentdates (documentid, documentdate)  " & _
+                                    "VALUES (" & docid & ", '" & docdate & "')"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Check and Add document attributes if not already in database 
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddDocumentTitle(ByVal docid As Integer, ByVal title As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documenttitles " & _
+                "WHERE documentid = " & docid
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO documenttitles (documentid, title)  " & _
+                                    "VALUES (" & docid & ", '" & title & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            Else
+                sqlstmt = "UPDATE documenttitles " & _
+                            "SET title = '" & title & "' " & _
+                            "WHERE documentid = " & docid
+
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddDocumentAuthor(ByVal docid As Integer, ByVal coid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documentauthors " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND companyid = '" & coid & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO documentauthors (documentid, companyid)  " & _
+                                    "VALUES (" & docid & ", " & coid & ")"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddDocumentPlan(ByVal docid As Integer, ByVal pg As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM plans " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND pagenbr = '" & pg & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO plans (documentid, pagenbr)  " & _
+                                    "VALUES (" & docid & ", '" & pg & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddDocumentDetail(ByVal docid As Integer, ByVal pg As String, ByVal detail As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM details " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND pagenbr = '" & pg & "'" & " " & _
+                "AND detailnbr = '" & detail & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO details (documentid, pagenbr, detailnbr)  " & _
+                                    "VALUES (" & docid & ", '" & pg & "', '" & detail & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddDocumentPlantype(ByVal docid As Integer, ByVal pg As String, ByVal plantype As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documentplantypes " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND pagenbr = '" & pg & "'" & " " & _
+                "AND plantype = '" & plantype & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO documentplantypes (documentid, pagenbr, plantype)  " & _
+                                    "VALUES (" & docid & ", '" & pg & "', '" & plantype & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddDocumentPhase(ByVal docid As Integer, ByVal ph As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documentphases " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND phase = '" & ph & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO documentphases (documentid, phase)  " & _
+                                    "VALUES (" & docid & ", '" & ph & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddDocumentLot(ByVal docid As Integer, ByVal lot As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documentlots " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND lot = '" & lot & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO documentlots (documentid, lot)  " & _
+                                    "VALUES (" & docid & ", '" & lot & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddDocumentBldg(ByVal docid As Integer, ByVal bldg As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documentbldgs " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND bldg = '" & bldg & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO documentbldgs (documentid, bldg)  " & _
+                                    "VALUES (" & docid & ", '" & bldg & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddDocumentUnit(ByVal docid As Integer, ByVal unit As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documentunits " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND unit = '" & unit & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO documentunits (documentid, unit)  " & _
+                                    "VALUES (" & docid & ", '" & unit & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddDocumentAddress(ByVal docid As Integer, ByVal houseid As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM documenthomes " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND houseid = " & houseid
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO documenthomes (documentid, houseid)  " & _
+                                    "VALUES (" & docid & ", " & houseid & ")"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Edit document 
+    '*******************************************************************************
+
+    <WebMethod()> Public Function EditDocument(ByVal docid As Integer, ByVal filename As String, ByVal category As String, ByVal pplid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "UPDATE documents " & _
+                        "SET docfilename = '" & filename & "', " & _
+                         "documentcategory = '" & category & "',  " & _
+                         "updatedate = '" & Now() & "', " & _
+                         "peopleid = " & pplid & " " & _
+                        "WHERE documentid = " & docid
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Delete document attributes
+    '*******************************************************************************
+
+    <WebMethod()> Public Function DeleteDocumentSubCat(ByVal docid As Integer, ByVal cat As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE documnetsubcategories " & _
+                        "WHERE documentid = " & docid & " " & _
+                        "AND subcategory = '" & cat & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteDocumentDate(ByVal docid As Integer, ByVal docdate As Date) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE documentdates " & _
+                    "WHERE documentid = " & docid & " " & _
+                    "AND documentdate = '" & docdate & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteDocumentTitle(ByVal docid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE documenttitles " & _
+                    "WHERE documentid = " & docid
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteDocumentAuthor(ByVal docid As Integer, ByVal coid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE documentauthors " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND companyid = '" & coid & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteDocumentPlan(ByVal docid As Integer, ByVal pg As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE plans " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND pagenbr = '" & pg & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteDocumentDetail(ByVal docid As Integer, ByVal pg As String, ByVal detail As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE details " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND pagenbr = '" & pg & "'" & " " & _
+                "AND detailnbr = '" & detail & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteDocumentPlantype(ByVal docid As Integer, ByVal pg As String, ByVal plantype As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE documentplantypes " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND pagenbr = '" & pg & "'" & " " & _
+                "AND plantype = '" & plantype & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteDocumentPhase(ByVal docid As Integer, ByVal ph As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE documentphases " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND phase = '" & ph & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteDocumentLot(ByVal docid As Integer, ByVal lot As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE documentlots " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND lot = '" & lot & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteDocumentBldg(ByVal docid As Integer, ByVal bldg As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE documentbldgs " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND bldg = '" & bldg & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+
+    <WebMethod()> Public Function DeleteDocumentUnit(ByVal docid As Integer, ByVal unit As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE documentunits " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND unit = '" & unit & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteDocumentAddress(ByVal docid As Integer, ByVal houseid As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE documenthomes " & _
+                "WHERE documentid = " & docid & " " & _
+                "AND houseid = '" & houseid & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Code Detail "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get document catetories and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetCodes(ByVal projid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT code FROM inspectioncodes " & _
+                    "WHERE catnbr < 20 " & _
+                    "AND itemnbr NOT IN (98, 99) " & _
+                    "AND subcatnbr <> 98 " & _
+                    "AND code NOT IN (SELECT code FROM codedetail " & _
+                    "WHERE documentid IN (SELECT documentid FROM documents " & _
+                    "WHERE projectid = " & projid & ")) " & _
+                    "ORDER BY catnbr, subcatnbr, itemnbr"
+
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get document catetories and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetFilename(ByVal projid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT documentid, docfilename FROM documents " & _
+                        "WHERE projectid = " & projid & " " & _
+                        "AND documentid in (SELECT documentid FROM documnetsubcategories " & _
+                        "WHERE subcategory in ('detail', 'specifications')) " & _
+                        "ORDER BY docfilename"
+
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get document catetories and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetCodeDetail(ByVal projid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.codedetail.documentid, dbo.codedetail.code, dbo.documents.docfilename " & _
+                    "FROM dbo.codedetail INNER JOIN dbo.documents ON dbo.codedetail.documentid = dbo.documents.documentid " & _
+                    "WHERE dbo.documents.projectid = " & projid
+
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Add codedetail to database
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddCodeDetail(ByVal code As String, ByVal docid As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "INSERT INTO codedetail (code, documentid)  " & _
+                                  "VALUES ('" & code & "', " & docid & ")"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Followup Photo "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get Manufacturers and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetAttnIresults(ByVal projid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT iresultsid " & _
+                        "FROM iresults " & _
+                        "WHERE projectid = " & projid & " " & _
+                        "AND attention = 1 " & _
+                        "AND iresultsid not in " & _
+                            "(SELECT ire_iresultsid " & _
+                                "FROM iresults " & _
+                                "WHERE ire_iresultsid is not null " & _
+                                "AND projectid = " & projid & ") " & _
+                        "ORDER BY iresultsid"
+
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '   Programmer:  Patricia Kline                            
+    '   Created Date: 1/11/03                                 
+    '   Modified Date:                                         
+    '   Event:  Get inspectors for specific company
+    '*******************************************************************************
+
+    <WebMethod()> Public Function Get_Inspectors(ByVal companyid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+        Dim sqlstmt As String
+        sqlstmt = "SELECT p.peopleid, fname + ' ' + lname AS name, i.initials " & _
+                    "FROM dbo.people p LEFT OUTER JOIN " & _
+                        "dbo.inspectors i ON p.peopleid = i.peopleid " & _
+                    "WHERE companyid = " & companyid & " " & _
+                    "ORDER BY fname ASC"
+
+        Try
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddFollowup(ByVal projid As Integer, ByVal refid As String, ByVal inspector As Integer, ByVal comment As String, ByVal idate As Date) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+        Dim cnt As Integer
+        Dim item As String = Microsoft.VisualBasic.Left(refid, Len(refid) - 1) & "2"
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "SELECT count(*) FROM iresults " & _
+                "WHERE projectid = " & projid & " " & _
+                "AND iresultsid = '" & item & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO iresults (projectid, iresultsid, sub_companyid, code, " & _
+                                    "locationname, ins_peopleid, ire_projectid, ire_iresultsid, " & _
+                                    "lot, bldg, unit, phase, comment, approved, inspectiondate, " & _
+                                    "plantype) " & _
+                            "SELECT projectid, '" & item & "', sub_companyid, Replace(code, '.99', '.98'), " & _
+                                    "locationname, " & inspector & ", projectid, '" & refid & "', " & _
+                                    "lot, bldg, unit, phase, '" & comment & "', 0, '" & idate & "', " & _
+                                    "plantype " & _
+                                "FROM iresults " & _
+                                "WHERE projectid = " & projid & " AND iresultsid = '" & refid & "' "
+
+                Dim sqlCmd2 As New SqlCommand(LCase(sqlstmt), SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddFollowupPhoto(ByVal projid As Integer, ByVal refid As String, ByVal photo As String) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+        Dim cnt As Integer
+        Dim item As String = Microsoft.VisualBasic.Left(refid, Len(refid) - 1) & "2"
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "SELECT count(*) FROM inspectionphotos " & _
+                "WHERE projectid = " & projid & " " & _
+                "AND iresultsid = '" & item & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO inspectionphotos (projectid, iresultsid, photofilename) " & _
+                            "VALUES (" & projid & ", '" & item & "', '" & photo & "')"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Equipment "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get Manufacturers and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetManufacturers() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT companyid, name " & _
+                        "FROM companies " & _
+                        "WHERE manufactuersco = 1 " & _
+                        "ORDER BY name"
+
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get parts and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetParts() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT parts.partno, vcnet.dbo.companies.name as coname, parts.description, parts.manufactureid " & _
+                        "FROM parts INNER JOIN " & _
+                            "vcnet.dbo.companies ON parts.manufactureid = vcnet.dbo.companies.companyid " & _
+                        "ORDER BY description"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddEditParts(ByVal coid As String, ByVal part As String, ByVal desc As String) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM parts " & _
+                "WHERE manufactureid = " & coid & " " & _
+                "AND partno = '" & part & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO parts (manufactureid, partno, description)  " & _
+                                "VALUES (" & coid & ", '" & part & "', '" & desc & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            Else
+                sqlstmt = "UPDATE parts SET description =  '" & desc & "' " & _
+                            "WHERE manufactureid = " & coid & " AND partno = '" & part & "'"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get manfacturer parts and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetManfacturerParts(ByVal coid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT parts.partno, parts.description " & _
+                        "FROM parts " & _
+                        "WHERE manufactureid = " & coid & _
+                        "ORDER BY description"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get equipment and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetEquipment() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.equipment.equipmentid, vcnet.dbo.companies.name AS coname, dbo.parts.description AS part, dbo.equipment.shippeddate, " & _
+                            "dbo.equipment.receiveddate, dbo.equipment.price, dbo.equipment.serialnumber, hh3.hh3name, dbo.equipment.ordernumber, dbo.equipment.warranty, " & _
+                            "dbo.equipment.isreplaced, dbo.equipment.partno, dbo.equipment.manufactureid " & _
+                        "FROM dbo.equipment INNER JOIN " & _
+                            "vcnet.dbo.companies ON dbo.equipment.manufactureid = vcnet.dbo.companies.companyid INNER JOIN " & _
+                            "dbo.parts ON dbo.equipment.partno = dbo.parts.partno LEFT OUTER JOIN " & _
+                            "hh3 ON equipment.equipmentid = hh3.equipmentid "
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddEquipment(ByVal coid As String, ByVal part As String, ByVal shipped As String, ByVal recd As Date, ByVal serial As String, ByVal order As String, ByVal price As String, ByVal warranty As Byte) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+        Dim equipid As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM equipment " & _
+                "WHERE manufactureid = " & coid & " " & _
+                "AND partno = '" & part & "' " & _
+                "AND serialnumber = '" & serial & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO equipment (manufactureid, partno, shippeddate, receiveddate, price, serialnumber, ordernumber, warranty)  " & _
+                            "VALUES (" & coid & ", '" & part & "', " & shipped & ", '" & recd & "', " & price & ", '" & serial & "', '" & order & "', " & warranty & ")")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+
+                Return "True"
+            Else
+                sqlstmt = "SELECT equipmentid FROM equipment " & _
+                    "WHERE manufactureid = " & coid & " " & _
+                    "AND partno = '" & part & "' " & _
+                    "AND serialnumber = '" & serial & "'"
+
+                Dim sqlCmd3 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd3.CommandType = CommandType.Text
+                equipid = sqlCmd3.ExecuteScalar.ToString
+
+                Return "Dup" + equipid
+            End If
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function EditEquipment(ByVal equipid As Integer, ByVal coid As String, ByVal part As String, ByVal shipped As String, ByVal recd As Date, ByVal serial As String, ByVal order As String, ByVal price As String, ByVal warranty As Byte) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "UPDATE equipment " & _
+                      "SET manufactureid = " & coid & ", partno = '" & part & "', " & _
+                        "shippeddate = " & shipped & ", receiveddate = '" & recd & "', " & _
+                        "price = " & price & ", serialnumber = '" & serial & "', " & _
+                        "ordernumber = '" & order & "', warranty = " & warranty & " " & _
+                      "WHERE equipmentid = " & equipid
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function EquipmentReplaced(ByVal equipid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "UPDATE equipment " & _
+                      "SET isreplaced = 1 " & _
+                      "WHERE equipmentid = " & equipid
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get equipment that has not already been assigned and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetUnAssignedEquipment() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.equipment.equipmentid, dbo.parts.description + ' SN: ' + dbo.equipment.serialnumber AS equipitem " & _
+                        "FROM dbo.equipment INNER JOIN " & _
+                            "dbo.parts ON dbo.equipment.partno = dbo.parts.partno " & _
+                        "WHERE (dbo.equipment.equipmentid NOT IN (SELECT equipmentid FROM equipmenttopeople))"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get equipment assigned to selected employee and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetAssignedEquipment(ByVal pplid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.parts.description + ' SN: ' + dbo.equipment.serialnumber AS equipitem, dbo.equipmenttopeople.dateout, dbo.equipmenttopeople.dateoutcondition,  " & _
+                            "dbo.equipmenttopeople.datein, dbo.equipmenttopeople.dateincondition, dbo.hh3.hh3name, dbo.equipmenttopeople.equipmentid " & _
+                        "FROM dbo.equipmenttopeople INNER JOIN " & _
+                            "dbo.equipment ON dbo.equipmenttopeople.equipmentid = dbo.equipment.equipmentid INNER JOIN " & _
+                            "dbo.parts ON dbo.equipment.partno = dbo.parts.partno LEFT OUTER JOIN " & _
+                            "dbo.hh3 ON dbo.equipmenttopeople.equipmentid = dbo.hh3.equipmentid " & _
+                        "WHERE (dbo.equipmenttopeople.peopleid = " & pplid & ")"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddEditEquipmenttoPpl(ByVal pplid As String, ByVal equipid As String, ByVal dateout As Date, ByVal outcond As String, ByVal datein As String, ByVal incond As String) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM equipmenttopeople " & _
+                "WHERE peopleid = " & pplid & " " & _
+                "AND equipmentid = '" & equipid & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO equipmenttopeople (peopleid, equipmentid, dateout, dateoutcondition, datein, dateincondition)  " & _
+                                "VALUES (" & pplid & ", " & equipid & ", '" & dateout & "', '" & outcond & "', " & datein & ", " & incond & ")")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            Else
+                sqlstmt = "UPDATE equipmenttopeople " & _
+                            "SET dateout = '" & dateout & "', dateoutcondition = '" & outcond & "', " & _
+                                "datein = " & datein & ", dateincondition = " & incond & " " & _
+                            "WHERE peopleid = " & pplid & " AND equipmentid = '" & equipid & "'"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddEditHH3(ByVal equipid As String, ByVal hh3 As String) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM hh3 " & _
+                "WHERE equipmentid = '" & equipid & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO hh3 (equipmentid, hh3name)  " & _
+                                "VALUES (" & equipid & ", '" & hh3 & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            Else
+                sqlstmt = "UPDATE hh3 SET hh3name = '" & hh3 & "' " & _
+                            "WHERE equipmentid = " & equipid
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Call Center "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get Customers and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function Get_QueueCalls(ByVal queue As String) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT convert(varchar(10), dbo.calls.callid) + '^' + " & _
+                            "convert(varchar(10), dbo.problems.problemid) + '^' + " & _
+                            "convert(varchar(10), vcnet.dbo.companies.companyid) + '^' + " & _
+                            "convert(varchar(10), dbo.calls.cus_peopleid) + '^' + " & _
+                            "convert(varchar(10), dbo.calls.calldate, 1) + '^' + " & _
+                            "dbo.calls.type + '^' + dbo.problems.problemdesc, " & _
+                            "vcnet.dbo.people.fname + ' ' + vcnet.dbo.people.lname + ' (' + " & _
+                            "dbo.problems.problemcode + ')' AS conameproblem, " & _
+                            "dbo.problems.major, dbo.calls.priority, dbo.calls.onhold " & _
+                        "FROM  dbo.calls INNER JOIN " & _
+                            "vcnet.dbo.people ON dbo.calls.cus_peopleid = vcnet.dbo.people.peopleid INNER JOIN " & _
+                            "vcnet.dbo.companies ON vcnet.dbo.people.companyid = vcnet.dbo.companies.companyid INNER JOIN " & _
+                            "dbo.problems ON dbo.calls.problemid = dbo.problems.problemid " & _
+                        "WHERE (dbo.calls.closed = 0) AND (dbo.calls.queue = '" & queue & "') " & _
+                        "ORDER BY dbo.calls.calldate"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get IT techs for queues
+    '*******************************************************************************
+
+    <WebMethod()> Public Function Get_IT_Users() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT username " & _
+                        "FROM  users " & _
+                        "WHERE (dbo.users.it = 1) " & _
+                        "ORDER BY dbo.users.username"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get Customers and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function SearchCustomers(ByVal where As String) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT p.peopleid, c.companyid, p.fname + ' ' + p.lname AS customer, c.name AS coname " & _
+                        "FROM dbo.people p INNER JOIN " & _
+                            "dbo.companies c ON p.companyid = c.companyid " & _
+                        "WHERE " & where & " " & _
+                        "ORDER BY fname, lname"
+
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get all open calls for company and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetCompanyCalls(ByVal coid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.calls.callid, dbo.calls.calldate, dbo.problems.problemcode + ' ' + dbo.problems.problemdesc AS problem," & _
+                            "dbo.calls.type, dbo.calls.queue, vcnet.dbo.people.peopleid, dbo.calls.problemid,  vcnet.dbo.people.fname + ' ' + vcnet.dbo.people.lname AS pplname, " & _
+                            "dbo.calls.priority, dbo.calls.closed " & _
+                        "FROM dbo.calls INNER JOIN " & _
+                            "dbo.problems ON dbo.calls.problemid = dbo.problems.problemid INNER JOIN " & _
+                            "vcnet.dbo.people ON dbo.calls.cus_peopleid = vcnet.dbo.people.peopleid " & _
+                        "WHERE (vcnet.dbo.people.companyid = " & coid & ") " & _
+                        "ORDER BY dbo.calls.closed, dbo.calls.callid "
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get Customers and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetCustomers() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT peopleid, fname + ' ' + lname AS customer " & _
+                        "FROM people " & _
+                        "ORDER BY fname, lname"
+
+            Dim SqlConn As New SqlConnection(strVcnetConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get call types and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetCallTypes() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT type " & _
+                        "FROM calltypes"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get call types and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetApplicationCallTypes() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT abbr + calltype as value, application " & _
+                        "FROM applicationtypes"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get caller phone numbers and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetCallerPhoneNumbers(ByVal pplid As Integer) As String()
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+        Dim result(0) As String
+        Dim x As Integer
+        Dim y As Integer
+
+        Try
+            result(0) = "none"
+            sqlstmt = "SELECT cell, worknumber " & _
+                        "FROM people " & _
+                        "WHERE peopleid = " & pplid
+
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlDr = sqlCmd.ExecuteReader
+
+            While sqlDr.Read
+                For x = 0 To 1
+                    If LCase(sqlDr.GetValue(x).GetType.ToString) <> "system.dbnull" Then
+                        ReDim Preserve result(y)
+                        result(y) = sqlDr.GetString(x)
+                        y += 1
+                    End If
+                Next
+            End While
+
+            sqlDr.Close()
+
+            Return result
+
+        Catch ex As SqlException
+            Dim equip(2) As String
+            equip(0) = "Error"
+            equip(1) = CStr(ex.Number)
+            equip(2) = ex.Message
+
+            Return equip
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get caller phone numbers and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetAddlCallInfo(ByVal callid As Integer) As String()
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim sqlstmt As String
+        Dim result(1) As String
+        Dim x As Integer
+        Dim y As Integer
+
+        Try
+            sqlstmt = "SELECT cus_phone, onhold " & _
+                        "FROM calls " & _
+                        "WHERE callid = " & callid
+
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+
+            sqlDr = sqlCmd.ExecuteReader
+
+            While sqlDr.Read
+                If LCase(sqlDr(0).GetType.ToString) <> "system.dbnull" Then
+                    result(0) = sqlDr.GetString(0)
+                Else
+                    result(0) = ""
+                End If
+
+                result(1) = sqlDr.GetBoolean(1).ToString
+            End While
+
+            sqlDr.Close()
+            Return result
+
+        Catch ex As SqlException
+            ReDim result(2)
+            result(0) = "Error"
+            result(1) = CStr(ex.Number)
+            result(2) = ex.Message
+
+            Return result
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get error types and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetProblemsCodes(ByVal type As String) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT problemid, problemcode + '-' + problemdesc " & _
+                        "FROM problems " & _
+                        "WHERE left(problemcode, 2) like '%" & type & "' " & _
+                        "ORDER BY problemcode"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get call notes and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetProblemSolutions(ByVal probid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT notedate, p.fname + '  ' + p.lname AS tech, notes " & _
+                        "FROM callnotes INNER JOIN " & _
+                            "vcnet.dbo.people p ON callnotes.techpeopleid = p.peopleid " & _
+                        "WHERE solution = 1 " & _
+                        "AND callid in (SELECT callid FROM calls WHERE problemid = " & probid & ") " & _
+                        "ORDER BY notedate"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get call notes and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetCallNotes(ByVal callid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.callnotes.notedate, vcnet.dbo.people.fname + '  ' + vcnet.dbo.people.lname AS tech, dbo.callnotes.notes " & _
+                        "FROM dbo.callnotes INNER JOIN " & _
+                            "vcnet.dbo.people ON dbo.callnotes.techpeopleid = vcnet.dbo.people.peopleid " & _
+                        "WHERE dbo.callnotes.callid = " & callid & " " & _
+                        "ORDER BY dbo.callnotes.notedate DESC"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Add new call
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddCall(ByVal pplid As Integer, ByVal phone As String, ByVal probid As Integer, ByVal type As String, ByVal queue As String, ByVal priority As Byte) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+        Dim callid As String = ""
+        Dim calldate As Date = Now
+
+        Try
+            SqlConn.Open()
+            sqlstmt = LCase("INSERT INTO calls (cus_peopleid, cus_phone, problemid, calldate, type, queue, priority)  " & _
+                        "VALUES (" & pplid & ", '" & phone & "', " & probid & ", '" & calldate & "', '" & type & "', '" & queue & "', '" & priority & "')")
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            sqlstmt = "SELECT callid FROM calls " & _
+                "WHERE cus_peopleid = " & pplid & " " & _
+                "AND problemid = " & probid & " " & _
+                "AND calldate = '" & calldate & "' "
+
+            Dim sqlCmd3 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd3.CommandType = CommandType.Text
+            callid = sqlCmd3.ExecuteScalar.ToString
+
+            Return callid
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  12/3/03                                               
+    ' Modified Date:                                                      
+    ' Event: Add answers to spot survey
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddSpotSurvey(ByVal q1 As Byte, ByVal q2 As Byte, ByVal q3 As String) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim sqlstmt As String
+        Dim calldate As String = Now.ToShortDateString
+
+        Try
+            SqlConn.Open()
+            sqlstmt = LCase("INSERT INTO spotsurvey (surveydate, quest1, quest2, quest3)  " & _
+                        "VALUES ('" & calldate & "', " & q1 & ", " & q2 & ", '" & q3 & "')")
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  12/3/03                                               
+    ' Modified Date:                                                      
+    ' Event: Decline spot survey
+    '*******************************************************************************
+
+    <WebMethod()> Public Function DeclineSurvey(ByVal callid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim sqlstmt As String
+        Dim calldate As String = Now.ToShortDateString
+
+        Try
+            SqlConn.Open()
+            sqlstmt = LCase("INSERT INTO declinesurveys (callid)  " & _
+                        "VALUES (" & callid & ")")
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Add new call notes
+    '*******************************************************************************
+
+    <WebMethod()> Public Function EditCall(ByVal callid As Integer, ByVal pplid As Integer, ByVal phone As String, ByVal queue As String, ByVal priority As Byte) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+        Dim errortrackid As String = ""
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "UPDATE calls " & _
+                        "SET cus_peopleid = " & pplid & ", " & _
+                            "cus_phone = '" & phone & "', " & _
+                            "queue = '" & queue & "', " & _
+                            "priority = " & priority & " " & _
+                        "WHERE callid = " & callid
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Add new call notes
+    '*******************************************************************************
+
+    <WebMethod()> Public Function EditCallClose(ByVal callid As Integer, ByVal pplid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "UPDATE calls " & _
+                        "SET closed = 1, " & _
+                            "closedby = " & pplid & ", " & _
+                            "closeddate = '" & Now & "' " & _
+                        "WHERE callid = " & callid
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Put call on hold
+    '*******************************************************************************
+
+    <WebMethod()> Public Function EditCallHold(ByVal callid As Integer, ByVal hold As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "UPDATE calls " & _
+                        "SET onhold = " & hold & _
+                        "WHERE callid = " & callid
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Add new call notes
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddCallNote(ByVal callid As Integer, ByVal note As String, ByVal pplid As Integer, ByVal solution As Byte) As String
+
+        note = Replace(note, "'", "''")
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+        Dim errortrackid As String = ""
+
+        Try
+            SqlConn.Open()
+            sqlstmt = LCase("INSERT INTO callnotes (callid, notedate, notes, techpeopleid, solution)  " & _
+                        "VALUES (" & callid & ", '" & Now & "', '" & note & "', " & pplid & ", " & solution & ")")
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get equipment list of caller that could be returned
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetPpplEquipment(ByVal pplid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.equipmenttopeople.equipmentid, dbo.parts.description + ' SN: ' + dbo.equipment.serialnumber AS equipitem " & _
+                        "FROM dbo.equipmenttopeople INNER JOIN " & _
+                            "dbo.equipment ON dbo.equipmenttopeople.equipmentid = dbo.equipment.equipmentid INNER JOIN " & _
+                            "dbo.parts ON dbo.equipment.partno = dbo.parts.partno " & _
+                        "WHERE (dbo.equipmenttopeople.peopleid = " & pplid & ")"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get equipment return
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetEquipReturn(ByVal callid As Integer) As String()
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim sqlstmt As String
+
+        Try
+            Dim equip(1) As String
+            equip(0) = "None"
+            sqlstmt = "SELECT dbo.parts.description + ' SN: ' + dbo.equipment.serialnumber AS equipitem, dbo.equipmentreturns.returnauthorization " & _
+                        "FROM dbo.equipmenttopeople INNER JOIN " & _
+                            "dbo.equipment ON dbo.equipmenttopeople.equipmentid = dbo.equipment.equipmentid INNER JOIN " & _
+                            "dbo.parts ON dbo.equipment.partno = dbo.parts.partno INNER JOIN " & _
+                            "dbo.equipmentreturns ON dbo.equipmenttopeople.equipmentid = dbo.equipmentreturns.equipmentid " & _
+                        "WHERE dbo.equipmentreturns.callid = " & callid
+
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlDr = sqlCmd.ExecuteReader
+
+            While sqlDr.Read
+                equip(0) = sqlDr.GetString(0)
+                equip(1) = sqlDr.GetString(1)
+            End While
+
+            sqlDr.Close()
+
+            Return equip
+
+        Catch ex As SqlException
+            Dim equip(2) As String
+            equip(0) = "Error"
+            equip(1) = CStr(ex.Number)
+            equip(2) = ex.Message
+
+            Return equip
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get equipment list of caller that could be returned
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetEquipReturnShipping(ByVal callid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT sfrom.name AS sfrom, sto.name AS sto, dbo.equipmentreturnsshipping.dateshipped, " & _
+                            "dbo.equipmentreturnsshipping.methodshipped, dbo.equipmentreturnsshipping.trackingnumber " & _
+                        "FROM dbo.equipmentreturnsshipping INNER JOIN " & _
+                            "vcnet.dbo.companies sfrom ON dbo.equipmentreturnsshipping.co_shippedfrom = sfrom.companyid INNER JOIN " & _
+                            "vcnet.dbo.companies sto ON dbo.equipmentreturnsshipping.co_shippedto = sto.companyid " & _
+                        "WHERE (dbo.equipmentreturnsshipping.callid = " & callid & ")"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Add equipment return
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddEquipReturn(ByVal callid As Integer, ByVal equipid As String, ByVal ra As String) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = LCase("INSERT INTO equipmentreturns (callid, equipmentid, returnauthorization)  " & _
+                        "VALUES (" & callid & ", " & equipid & ", '" & ra & "')")
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddEquipShipping(ByVal callid As Integer, ByVal sfrom As String, ByVal sto As String, ByVal sdate As Date, ByVal method As String, ByVal track As String) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = LCase("INSERT INTO equipmentreturnsshipping (callid, co_shippedfrom, co_shippedto, dateshipped, methodshipped, trackingnumber)  " & _
+                        "VALUES (" & callid & ", " & sfrom & ", " & sto & ", '" & sdate & "', '" & method & "', '" & track & "')")
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Problems "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get Problems and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetProblems() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT problemid, problemcode, problemdesc, major " & _
+                        "FROM problems " & _
+                        "ORDER BY problemcode"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function GetNextProblemNbr(ByVal type As String, ByVal app As String) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim max As String
+        Dim prefix As String = type & app
+        Dim sqlstmt As String
+        Dim nextnbr As Integer
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = LCase("SELECT max(Left(problemcode,5)) FROM problems " & _
+                "WHERE problemcode like '" & prefix & "%' ")
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            max = sqlCmd1.ExecuteScalar.ToString
+
+            If max = "" Then
+                nextnbr = 1
+            Else
+                nextnbr = Microsoft.VisualBasic.Right(max, 3)
+                nextnbr += 1
+            End If
+
+            Return nextnbr
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddProblem(ByVal code As String, ByVal desc As String, ByVal major As Byte) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+        Dim errortrackid As String = ""
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = LCase("SELECT count(*) FROM problems " & _
+                "WHERE problemcode = '" & code & "' " & _
+                "AND problemdesc = '" & desc & "'")
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO problems (problemcode, problemdesc, major)  " & _
+                            "VALUES ('" & code & "', '" & desc & "', " & major & ")")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            'get problemid for problem just added
+            Dim pid As Integer
+
+            sqlstmt = LCase("SELECT max(problemid) FROM problems " & _
+                "WHERE problemcode = '" & code & "' " & _
+                "AND problemdesc = '" & desc & "'")
+
+            Dim sqlCmd3 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd3.CommandType = CommandType.Text
+            pid = CInt(sqlCmd3.ExecuteScalar.ToString)
+
+            Return pid
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function EditProblem(ByVal pid As Integer, ByVal code As String, ByVal desc As String, ByVal major As Byte) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+        Dim errortrackid As String = ""
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = LCase("SELECT count(*) FROM problems " & _
+                "WHERE problemcode = '" & code & "' " & _
+                "AND problemdesc = '" & desc & "' " & _
+                "AND problemid <> " & pid)
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = LCase("UPDATE problems " & _
+                            "SET problemcode = '" & code & "', " & _
+                                "problemdesc = '" & desc & "', " & _
+                                "major = " & major & " " & _
+                            "WHERE problemid = " & pid)
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+
+#End Region
+
+#Region " Management "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get parts and return in dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetServiceAgreements() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.serviceagreement.agreementid, dbo.serviceagreement.companyid, vcnet.dbo.companies.name, dbo.serviceagreement.signed, dbo.serviceagreementdates.effdate, " & _
+                            "dbo.serviceagreementdates.expdate, dbo.serviceagreementcalls.callpack, dbo.serviceagreementcalls.remaining, dbo.companiesstatus.status " & _
+                       "FROM dbo.serviceagreement INNER JOIN " & _
+                            "vcnet.dbo.companies ON dbo.serviceagreement.companyid = vcnet.dbo.companies.companyid INNER JOIN " & _
+                            "dbo.companiesstatus ON vcnet.dbo.companies.companyid = dbo.companiesstatus.companyid LEFT OUTER JOIN " & _
+                            "dbo.serviceagreementcalls ON dbo.serviceagreement.agreementid = dbo.serviceagreementcalls.agreementid LEFT OUTER JOIN " & _
+                            "dbo.serviceagreementdates ON dbo.serviceagreement.agreementid = dbo.serviceagreementdates.agreementid " & _
+                        "ORDER BY vcnet.dbo.companies.name"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function GetServiceAgreementsModules(ByVal agreeid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT appmodule FROM serviceagreementmodules " & _
+                        "WHERE agreementid = " & agreeid
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddServiceAgreement(ByVal coid As Integer, ByVal signed As Date) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+        Dim id As Integer
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM serviceagreement " & _
+                "WHERE companyid = " & coid & " " & _
+                "AND signed = '" & signed & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO serviceagreement (companyid, signed)  " & _
+                                "VALUES (" & coid & ", '" & signed & "')"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+
+                sqlstmt = "SELECT agreementid FROM serviceagreement " & _
+                    "WHERE companyid = " & coid & " " & _
+                    "AND signed = '" & signed & "'"
+
+                Dim sqlCmd3 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd3.CommandType = CommandType.Text
+                cnt = CInt(sqlCmd3.ExecuteScalar.ToString)
+
+                Return cnt
+            Else
+                Return "Dup"
+            End If
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddEditServiceDates(ByVal agreeid As Integer, ByVal eff As Date, ByVal exp As Date) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM serviceagreementdates " & _
+                "WHERE agreementid = " & agreeid
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO serviceagreementdates (agreementid, effdate, expdate)  " & _
+                                "VALUES (" & agreeid & ", '" & eff & "', '" & exp & "')"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            Else
+                sqlstmt = "UPDATE serviceagreementdates " & _
+                            "SET effdate = '" & eff & "', expdate = '" & exp & "' " & _
+                            "WHERE agreementid = " & agreeid
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddEditServiceCalls(ByVal agreeid As Integer, ByVal calls As Integer, ByVal remain As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM serviceagreementcalls " & _
+                "WHERE agreementid = " & agreeid
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO serviceagreementcalls (agreementid, callpack, remaining)  " & _
+                                "VALUES (" & agreeid & ", '" & calls & "', '" & remain & "')"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            Else
+                sqlstmt = "UPDATE serviceagreementcalls " & _
+                            "SET callpack = '" & calls & "', remaining = '" & remain & "' " & _
+                            "WHERE agreementid = " & agreeid
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddServicemodules(ByVal agreeid As Integer, ByVal modl As String) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM serviceagreementmodules " & _
+                "WHERE agreementid = " & agreeid & " " & _
+                "AND appmodule = '" & modl & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = LCase("INSERT INTO serviceagreementmodules (agreementid, appmodule)  " & _
+                                "VALUES (" & agreeid & ", '" & modl & "')")
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteServicemodules(ByVal agreeid As Integer, ByVal modl As String) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE serviceagreementmodules " & _
+                        "WHERE agreementid = " & agreeid & " " & _
+                        "AND appmodule '" & modl & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddEditCompanyStatus(ByVal coid As Integer, ByVal stat As Byte) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM companiesstatus " & _
+                "WHERE companyid = " & coid
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO companiesstatus (companyid, status)  " & _
+                                "VALUES (" & coid & ", " & stat & ")"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            Else
+                sqlstmt = "UPDATE companiesstatus " & _
+                            "SET status = " & stat & " " & _
+                            "WHERE companyid = " & coid
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function EditServiceAgreement(ByVal agreeid As Integer, ByVal coid As Integer, ByVal signed As Date) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM serviceagreements " & _
+                "WHERE companyid = " & coid & " " & _
+                "AND signed = '" & signed & "' " & _
+                "AND agreeid <> " & agreeid
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "UPDATE serviceagreements " & _
+                            "SET companyid = " & coid & ", signed '" & signed & "' " & _
+                            "WHERE agreementid = " & agreeid
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function GetCallReminders() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.callreminders.peopleid, vcnet.dbo.people.fname + ' ' + vcnet.dbo.people.lname AS employee, dbo.callreminders.daysinterval, dbo.callreminders.deliverymethod, " & _
+                            "dbo.callreminders.deliverymethod, dbo.callreminders.type, dbo.problems.problemcode " & _
+                        "FROM dbo.callreminders INNER JOIN " & _
+                            "vcnet.dbo.people ON dbo.callreminders.peopleid = vcnet.dbo.people.peopleid LEFT OUTER JOIN " & _
+                            "dbo.problems ON dbo.callreminders.reason = dbo.problems.problemid"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddReminder(ByVal pplid As Integer, ByVal days As Integer, ByVal method As String, ByVal type As String, ByVal reason As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM callreminders " & _
+                "WHERE peopleid = " & pplid & " " & _
+                "AND daysinterval = " & days & " " & _
+                "AND deliverymethod = '" & method & "' " & _
+                "AND type = '" & type & "' "
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO callreminders (peopleid, daysinterval, deliverymethod, type, reason)  " & _
+                            "VALUES (" & pplid & ", " & days & ", '" & method & "', '" & type & "', "
+
+                If reason = 0 Then
+                    sqlstmt = sqlstmt & " NULL)"
+                Else
+                    sqlstmt = sqlstmt & reason & ")"
+                End If
+
+                Dim sqlCmd2 As New SqlCommand(LCase(sqlstmt), SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function DeleteReminder(ByVal pplid As Integer, ByVal days As Integer, ByVal method As String, ByVal type As String) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "DELETE callreminders " & _
+                        "WHERE peopleid = " & pplid & "  " & _
+                        "AND daysinterval = " & days & " " & _
+                        "AND deliverymethod = '" & method & "' " & _
+                        "AND type = '" & type & "'"
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function GetUsers() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.users.peopleid, vcnet.dbo.people.fname + ' ' + vcnet.dbo.people.lname AS employee, dbo.users.username, dbo.users.password, " & _
+                            "dbo.users.mgmt " & _
+                        "FROM vcnet.dbo.people INNER JOIN " & _
+                            "dbo.users ON vcnet.dbo.people.peopleid = dbo.users.peopleid "
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddUser(ByVal pplid As Integer, ByVal usern As String, ByVal mgmt As Byte) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM users " & _
+                "WHERE peopleid = " & pplid
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO users (peopleid, username, password, mgmt)  " & _
+                            "VALUES (" & pplid & ", '" & usern & "', 'dcd', " & mgmt & ")"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function EditUser(ByVal pplid As Integer, ByVal mgmt As Byte) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "UPDATE users SET mgmt = " & mgmt & " " & _
+                "WHERE peopleid = " & pplid
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function ResetUser(ByVal pplid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "UPDATE users SET password = 'dcd'" & _
+                "WHERE peopleid = " & pplid
+
+            Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd2.CommandType = CommandType.Text
+            sqlCmd2.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#Region " Call Center Reports "
+
+    <WebMethod()> Public Function OpenCallRpt() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT calls.callid, problems.problemcode, problems.problemdesc, n.maxdate, " & _
+                            "vcnet.dbo.people.fname + ' ' + vcnet.dbo.people.lname AS caller, " & _
+                            "DATEDIFF(d, calls.calldate, GETDATE()) AS days " & _
+                        "FROM calls INNER JOIN " & _
+                            "problems ON calls.problemid = problems.problemid INNER JOIN " & _
+                            "(SELECT callid, MAX(notedate) AS maxdate " & _
+                                "FROM callnotes " & _
+                                "GROUP BY callid) n ON calls.callid = n.callid INNER JOIN " & _
+                            "vcnet.dbo.people ON calls.cus_peopleid = vcnet.dbo.people.peopleid " & _
+                        "WHERE DATEDIFF(d, calls.calldate, GETDATE()) > 6 " & _
+                        "AND closed = 0"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function ClosedSummaryRpt(ByVal type As String, ByVal datefrom As Date, ByVal dateto As Date) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT calls.callid, problems.problemcode, problems.problemdesc, " & _
+                            "vcnet.dbo.people.fname + ' ' + vcnet.dbo.people.lname AS caller, " & _
+                            "DATEDIFF(d, calls.calldate, GETDATE()) AS days " & _
+                        "FROM calls INNER JOIN " & _
+                            "vcnet.dbo.people ON calls.cus_peopleid = vcnet.dbo.people.peopleid INNER JOIN " & _
+                            "problems ON calls.problemid = problems.problemid " & _
+                        "WHERE LEFT(problems.problemcode, 1) = '" & type & "' " & _
+                        "AND calldate BETWEEN '" & datefrom & "' AND '" & dateto & "' " & _
+                        "AND closed = 1"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function GetApplicationTypes() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT abbr, application " & _
+                        "FROM applicationtypes " & _
+                        "ORDER BY application"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function ClosedDetailRpt(ByVal type As String, ByVal datefrom As Date, ByVal dateto As Date) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT calls.callid, problems.problemcode, problems.problemdesc, " & _
+                            "vcnet.dbo.people.fname + ' ' + vcnet.dbo.people.lname AS caller, " & _
+                            "DATEDIFF(d, calls.calldate, GETDATE()) AS days, callnotes.notedate, callnotes.notes " & _
+                        "FROM calls INNER JOIN " & _
+                            "vcnet.dbo.people ON calls.cus_peopleid = vcnet.dbo.people.peopleid INNER JOIN " & _
+                            "problems ON calls.problemid = problems.problemid INNER JOIN " & _
+                            "callnotes ON calls.callid = callnotes.callid " & _
+                        "WHERE LEFT(problems.problemcode, 2) = '" & type & "' " & _
+                        "AND calldate BETWEEN '" & datefrom & "' AND '" & dateto & "' " & _
+                        "AND closed = 1"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function CallTypeTotal(ByVal datefrom As Date, ByVal dateto As Date) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT LEFT(problems.problemcode, 1) AS calltype, calls.closed, COUNT(calls.closed) AS cnt " & _
+                        "FROM calls INNER JOIN " & _
+                            "problems ON calls.problemid = problems.problemid " & _
+                        "WHERE calldate BETWEEN '" & datefrom & "' AND '" & dateto & "' " & _
+                        "GROUP BY LEFT(problems.problemcode, 1), calls.closed"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function ApplicationTotal(ByVal datefrom As Date, ByVal dateto As Date) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT LEFT(problems.problemcode, 2) AS calltype, calls.closed, COUNT(calls.closed) AS cnt " & _
+                        "FROM calls INNER JOIN " & _
+                            "problems ON calls.problemid = problems.problemid " & _
+                        "WHERE calldate BETWEEN '" & datefrom & "' AND '" & dateto & "' " & _
+                        "GROUP BY LEFT(problems.problemcode, 2), calls.closed"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AfterHrsTotal(ByVal datefrom As Date, ByVal dateto As Date) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT LEFT(problems.problemcode, 1) AS calltype, calls.closed, COUNT(calls.closed) AS cnt " & _
+                        "FROM calls INNER JOIN " & _
+                            "problems ON calls.problemid = problems.problemid " & _
+                        "WHERE calldate BETWEEN '" & datefrom & "' AND '" & dateto & "' " & _
+                        "AND Convert(varchar(15), calldate, 108) > '17:00:00' " & _
+                        "GROUP BY LEFT(problems.problemcode, 1), calls.closed"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+#End Region
+
+#End Region
+
+#Region " Timeslips "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get conames (developers) from projects table in dcdvcnet
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetdcdDevelopers() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT DISTINCT coname " & _
+                       "FROM projects " & _
+                        "ORDER BY coname"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get projects based on company selected
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetdcdProjects(ByVal coname As String) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT projid, projname " & _
+                       "FROM projects " & _
+                       "WHERE coname = '" & coname & "' " & _
+                        "ORDER BY projname "
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Time "
+
+    <WebMethod()> Public Function GetEmployeeName(ByVal pplid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strVcnetConn)
+        Dim sqlstmt As String
+        Dim name As String
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT fname + ' ' + lname FROM people " & _
+                "WHERE peopleid = " & pplid & " "
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            name = CStr(sqlCmd1.ExecuteScalar.ToString)
+
+            Return name
+
+        Catch ex As SqlException
+            Return "Error" & ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get conames (developers) from projects table in dcdvcnet
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetdcdActivities() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT description " & _
+                       "FROM activities " & _
+                        "ORDER BY description"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get employees that have submitted timesheets 
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetEmployeesSubmit() As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT DISTINCT dbo.timesheets.screenname " & _
+                       "FROM dbo.timesheets INNER JOIN " & _
+                            "dbo.users ON dbo.timesheets.screenname = dbo.users.username " & _
+                       "WHERE (dbo.timesheets.datesubmitted IS NOT NULL) " & _
+                       "AND (dbo.timesheets.dateapproved IS NULL) " & _
+                       "ORDER BY projname "
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get dates of timesheets that have not been submitted timesheets 
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetUnSubmittedDates(ByVal name As String) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT Convert(varchar(10), dbo.timesheets.[date], 1) " & _
+                       "FROM dbo.timesheets INNER JOIN " & _
+                            "dbo.users ON dbo.timesheets.screenname = dbo.users.username " & _
+                       "WHERE (dbo.timesheets.datesubmitted IS NULL) " & _
+                       "AND (dbo.timesheets.screenname = '" & name & "') " & _
+                       "ORDER BY dbo.timesheets.[date]"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get dates of timesheets that have not been submitted timesheets 
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetUnApprovedDates(ByVal name As String) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT Convert(varchar(10), dbo.timesheets.[date], 1) " & _
+                       "FROM dbo.timesheets INNER JOIN " & _
+                            "dbo.users ON dbo.timesheets.screenname = dbo.users.username " & _
+                       "WHERE (dbo.timesheets.datesubmitted IS NOT NULL) " & _
+                       "AND (dbo.timesheets.dateapproved IS NULL) " & _
+                       "AND (dbo.timesheets.screenname = '" & name & "') " & _
+                       "ORDER BY dbo.timesheets.[date]"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:                                                      
+    ' Event: Get timesheets based on user selected
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetTimeSheets(ByVal name As String, ByVal tsdate As Date) As DataSet
+
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT dbo.projects.coname, dbo.projects.projname, dbo.timesheetitems.phase, dbo.timesheetitems.activity, dbo.timesheetitems.detaildescription, dbo.timesheetitems.hours, dbo.timesheetitems.billable " & _
+                       "FROM dbo.timesheetitems INNER JOIN " & _
+                            "dbo.projects ON dbo.timesheetitems.projid = dbo.projects.projid " & _
+                       "WHERE (dbo.timesheetitems.screenname = '" & name & "' )" & _
+                       "AND (dbo.timesheetitems.[date] = '" & tsdate & "' )"
+
+            Dim SqlConn As New SqlConnection(strDcdConn)
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddTimesheets(ByVal sname As String, ByVal tsdate As Date, ByVal projid As Integer, ByVal ph As String, ByVal actvy As String, ByVal desc As String, ByVal hours As Double) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim cnt As Integer = 0
+        Dim sqlstmt As String
+        Dim billable As Byte
+        Dim bhours As Double
+
+        Try
+            SqlConn.Open()
+
+            'check if document has already been added
+            sqlstmt = "SELECT count(*) FROM timesheetitems " & _
+                "WHERE screenname = '" & sname & "' " & _
+                "AND date = '" & tsdate & "' " & _
+                "AND projid = " & projid & " " & _
+                "AND phase = '" & ph & "' " & _
+                "AND activity = '" & actvy & "' "
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                'check if activity is billable
+                sqlstmt = "SELECT billable FROM activities " & _
+                    "WHERE activity = '" & actvy & "' "
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                billable = CByte(sqlCmd2.ExecuteScalar.ToString)
+
+                If billable = 1 Then
+                    bhours = hours
+                Else
+                    bhours = 0
+                End If
+
+                sqlstmt = "INSERT INTO timesheetitems (screenname, date, projid, phase, activity, detaildescription, hours, billable ) " & _
+                            "VALUES (" & sname & ", '" & tsdate & "', " & projid & "', '" & ph & "', '" & actvy & "', '" & desc & "', " & hours & ", " & bhours & ")"
+                Dim sqlCmd3 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd3.CommandType = CommandType.Text
+                sqlCmd3.ExecuteNonQuery()
+                Return "True"
+            Else
+                Return "Dup"
+            End If
+
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function EditTimesheets(ByVal id As Integer, ByVal user As String, ByVal tsdate As Date, ByVal projid As Integer, ByVal ph As String, ByVal actvy As String, ByVal desc As String, ByVal hours As Double, ByVal bhours As Double) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim sqlstmt As String
+        Dim cnt As Integer
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "SELECT count(*) FROM timesheetitems " & _
+                    "WHERE screenname = '" & user & "' " & _
+                    "AND date = '" & tsdate & "' " & _
+                    "AND projid = " & projid & " " & _
+                    "AND phase = '" & ph & "' " & _
+                    "AND activity = '" & actvy & "' " & _
+                    "AND tid <> " & id
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            'add document if not already in database
+            If cnt = 0 Then
+                sqlstmt = "UPDATE timesheetitems " & _
+                            "SET projid = " & projid & ", " & _
+                                "phase = '" & ph & "', " & _
+                                "activity = '" & actvy & "', " & _
+                                "detaildescription = '" & desc & "', " & _
+                                "hours = " & hours & ", " & _
+                                "billable = " & bhours & " " & _
+                            "WHERE tid  = " & id
+
+                Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd.CommandType = CommandType.Text
+                sqlCmd.ExecuteNonQuery()
+                Return "True"
+            Else
+                Return "Dup"
+            End If
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function SubmitTimesheet(ByVal sname As String, ByVal tsdate As Date) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim sqlstmt As String
+        Dim bill As Byte
+
+        Try
+            SqlConn.Open()
+
+            sqlstmt = "UPDDATE timesheets " & _
+                        "SET submitted = 1, datesubmitted = getdate()" & _
+                        "WHERE screenname = '" & sname & "' " & _
+                        "AND date = '" & tsdate & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            sqlCmd1.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function ApproveTimesheet(ByVal sname As String, ByVal tsdate As Date) As String
+
+        Dim SqlConn As New SqlConnection(strDcdConn)
+        Dim sqlstmt As String
+        Dim bill As Byte
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "UPDDATE timesheets " & _
+                        "SET approved = 1, dateapproved = getdate()" & _
+                        "WHERE screenname = '" & sname & "' " & _
+                        "AND date = '" & tsdate & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            sqlCmd1.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+End Class

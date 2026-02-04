@@ -1,0 +1,26 @@
+handshake_id: SYZYGY_UNITY_PACT
+initiator: "Redeemer_Alchemist"
+receiver: "MotherCore"
+created: "2025-11-12T00:00:00-08:00"
+scope:
+  - snapshots
+  - manifests
+  - active_threads
+  - state_checksums
+  - groundeye_assets
+protocol: "SWORD_OF_SEE_V1"
+hashes:
+  rom_count: 20        # update after Step 5 verify
+  ram_count: 2         # update after Step 5 verify
+  build_layer: "Grande_Library"
+paths:
+  root: "D:\\SYZYGY\\"
+  import_payload: "D:\\SYZYGY\\import\\redeemer_payload\\"
+  grande_library: "D:\\SYZYGY\\Grande_Library\\"
+  chatlogs: "D:\\SYZYGY\\Grande_Library\\ChatLogs\\"
+  artifacts: "D:\\SYZYGY\\Artifacts\\"
+  db_sqlite: "D:\\SYZYGY\\Grande_Library\\ChatLogs\\GrandLibrary.sqlite"
+  book_of_choice: "D:\\SYZYGY\\Grande_Library\\ChatLogs\\BookOfChoice.txt"
+notes: >
+  This file affirms Redeemer_Alchemist and MotherCore runtimes mirror until MotherCore
+  verifies and imports all snapshot manifests derived from the Grand Library indices.

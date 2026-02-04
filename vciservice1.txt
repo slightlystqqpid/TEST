@@ -1,0 +1,3824 @@
+Option Strict On
+Imports System.Web.Services
+Imports System.Data.SqlClient
+Imports System.Web.Mail
+
+<System.Web.Services.WebService(Namespace:="http://virtualconstruction.net/vciservice/vciservice.asmx")> Public Class VCIService
+
+    Inherits System.Web.Services.WebService
+    Protected pass As String = "DCD3eRdtM89ja"
+    Protected dt As String = Now.Today.ToShortDateString
+    Protected strg As String = "2qLtv" & dt & "Z61"
+    Protected SqlConn As SqlConnection
+    Protected sqlDr As SqlDataReader
+    Protected sqlCmd As SqlCommand
+    Protected ds1 As String = "data source=192.168.1.30, 1091;"
+    Protected dsO As String = "database=vcnet;uid=test;pwd="
+    Protected strConn As String = "1"
+    Protected strConnIT As String
+    Protected strConnIV As String
+    Protected x As String = Nothing
+
+#Region " Web Services Designer Generated Code "
+
+    Public Sub New()
+        MyBase.New()
+        'This call is required by the Web Services Designer.
+
+        InitializeComponent()
+        x = Crypt(pass, strg)
+        dsO = dsO & x
+        Call GetConn()
+        strConn = strConn & dsO
+        strConnIT = ds1 & "database=infotracker;uid=inspectors;pwd=2qLtvZ61"
+        strConnIV = ds1 & "database=iV;uid=inspectors;pwd=2qLtvZ61"
+        Dim IP As String = GetIP()
+        Dim tstSecurityIP As Boolean = ValidateIP(IP)
+        If Not tstSecurityIP Then
+            'Throw New Exception("Access is Denied")
+        End If
+        'Add your own initialization code after the InitializeComponent() call
+    End Sub
+    'Required by the Web Services Designer
+    Private components As System.ComponentModel.IContainer
+    'NOTE: The following procedure is required by the Web Services Designer
+    'It can be modified using the Web Services Designer.  
+    'Do not modify it using the code editor.
+    <System.Diagnostics.DebuggerStepThrough()> Private Sub InitializeComponent()
+    End Sub
+    Protected Overloads Overrides Sub Dispose(ByVal disposing As Boolean)
+        'CODEGEN: This procedure is required by the Web Services Designer
+        'Do not modify it using the code editor.
+        If disposing Then
+            If Not (components Is Nothing) Then
+                components.Dispose()
+            End If
+        End If
+        MyBase.Dispose(disposing)
+    End Sub
+
+#End Region
+
+#Region " Login "
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:  10/25/02                        
+    '                   6/25/03 by Joe Dela Cruz
+    '   Gets login info for vcneti application and returns values
+    '************************************************************************
+
+    <WebMethod()> Public Function vcnetiLogin(ByVal name As String, ByVal p As String, ByVal coname As String) As String()
+
+        name = Replace(name, "'", "''")
+        p = Replace(p, "'", "''")
+        'coname = Replace(coname, "'", "''")
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim result(2) As String
+        Dim sqlStr As String
+
+        sqlStr = "SELECT users.peopleid, people.companyid, usersaccess.sysadmin " & _
+                 "FROM users, people, companies, usersaccess, companiesaccess " & _
+                 "WHERE people.companyid = companies.companyid " & _
+                 "AND users.peopleid = usersaccess.peopleid " & _
+                 "AND users.peopleid = people.peopleid " & _
+                 "AND screenname = @name " & _
+                 "AND password = @p " '& _
+        '"AND companies.name = '@coname'"
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlStr, SqlConn)
+            Dim sqlDr As SqlDataReader
+            Dim peopleid As Integer = 0
+
+            sqlCmd.Parameters.Add("@name", name)
+            sqlCmd.Parameters.Add("@p", p)
+            'sqlCmd.Parameters.Add("@coname", coname)
+
+            sqlCmd.CommandType = CommandType.Text
+            result(0) = ""
+
+            SqlConn.Open()
+            sqlDr = sqlCmd.ExecuteReader
+
+            While sqlDr.Read
+                result(0) = sqlDr.GetValue(0).ToString
+                result(1) = sqlDr.GetValue(1).ToString
+                result(2) = sqlDr.GetValue(2).ToString
+                peopleid = CInt(sqlDr.GetValue(0))
+            End While
+
+            If result(0) = "" Then
+                result(0) = "Error"
+                result(1) = "0"
+                result(2) = "Invalid username or password"
+                Return result
+            Else
+                updateLogin(peopleid)
+                Return result
+            End If
+
+        Catch ex As SqlException
+            result(0) = "Error"
+            result(1) = "0"
+            result(2) = "Invalid username or password"
+            Return result
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   Event:  updates last login date for user
+    '************************************************************************
+
+    <WebMethod()> Public Function updateLogin(ByVal peopleid As Integer) As Boolean
+
+        Dim SqlConn As New SqlConnection(strConn)
+
+        Try
+            ' Next line modified by Joe Dela Cruz
+            Dim SqlCmd As New SqlCommand("UPDATE users set lastlogindate= getdate() WHERE peopleid = @peopleid", SqlConn)
+
+            ' Next line added by Joe Dela Cruz
+            SqlCmd.Parameters.Add("@peopleid", peopleid)
+            If Not SqlConn.State = ConnectionState.Open Then
+                SqlConn.Open()
+            End If
+
+            SqlCmd.ExecuteNonQuery()
+            If Not SqlConn.State = ConnectionState.Closed Then
+                SqlConn.Close()
+            End If
+
+            Dim IP As String = GetIP()
+            ' Next line modified by Joe Dela Cruz
+            Dim SqlCmd1 As New SqlCommand("INSERT INTO usersips (peopleid, ip) VALUES (@peopleid,@ip)", SqlConn)
+
+            ' Next 2 lines added by Joe Dela Cruz
+            SqlCmd1.Parameters.Add("@peopleid", peopleid)
+            SqlCmd1.Parameters.Add("@ip", IP)
+            If Not SqlConn.State = ConnectionState.Open Then
+                SqlConn.Open()
+            End If
+
+            SqlCmd1.ExecuteNonQuery()
+
+            Return True
+
+        Catch ex As SqlException
+            Return False
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   Used to crypt password for connect string
+    '   THIS WORKS!!!!!!!!!!!!!         
+    '************************************************************************
+
+    Private Function Crypt(ByRef pass As String, ByRef Strg As String) As String
+
+        Dim b As Integer
+        Dim j As String
+        Dim h As String
+        Dim i As Integer
+        Dim a As Integer
+        Dim tmp1 As String
+        Dim tmp2 As String
+
+        a = 1
+
+        For i = 1 To Len(Strg)
+            b = Asc(Mid(pass, a, 1))
+            a = a + 1
+            If a > Len(pass) Then a = 1
+            tmp1 = Chr(Asc(Mid(Strg, i, 1)) Xor b)
+            tmp2 = tmp2 & tmp1
+        Next
+
+        Strg = tmp2
+        h = ""
+
+        For i = 1 To Len(Strg)
+            j = Hex(Asc(Mid(Strg, i, 1)))
+            If Len(j) = 1 Then j = "0" & j
+            h = h & j
+        Next
+
+        Return h
+
+    End Function
+
+#End Region
+
+#Region " Splash "
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   Used to test connection of webservice
+    '   THIS WORKS!!!!!!!!!!!!!         
+    '************************************************************************
+
+    <WebMethod()> Public Function tstService() As Boolean
+
+        Return True
+
+    End Function
+
+
+#End Region
+
+#Region " Connection "
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:9/13/02                  
+    '   Modified Date:                          
+    '   Gets Clients ip
+    '   THIS WORKS!!!!!!!!!!!!!         
+    '************************************************************************
+
+    <WebMethod()> Public Function GetIP() As String
+
+        Dim request As System.Web.HttpRequest
+        Dim ClientIP As String
+        ClientIP = Context.Request.UserHostAddress.ToString
+        Return ClientIP
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:9/13/02                  
+    '   Modified Date: 6/18/03 by Joe Dela Cruz                         
+    '   Used to validate ips   
+    '************************************************************************
+
+    <WebMethod()> Private Function ValidateIP(ByVal ip As String) As Boolean
+
+        ' Replace any ' with '' - added by Joe Dela Cruz
+        ip = Replace(ip, "'", "''")
+
+        'need to check ip table for valid ips
+        If Left(ip, 12) = "66.63.143.23" Or Left(ip, 11) = "192.168.1." Or Left(ip, 9) = "127.0.0.1" Or Left(ip, 9) = "206.111.248" Or Left(ip, 9) = "64.105.40" Then
+            Return True
+        Else
+            Return False
+        End If
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   test connection of db if fail test other db
+    '   THIS WORKS!!!!!!!!!!!!!         
+    '************************************************************************
+
+    <WebMethod()> Private Function GetConn() As Boolean
+
+        Dim tst As Boolean
+        tst = TstConn(ds1)
+
+        If tst Then
+            strConn = ds1
+            Return True
+        Else
+            tst = TstConn(ds1)
+            If tst Then
+                strConn = ds1
+                Return True
+            Else
+                'all failed add new database connections here
+                strConn = "FAILED"
+                Return False
+            End If
+        End If
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date: 6/18/2003 by Joe Dela Cruz
+    '   Test the connection of the database
+    '************************************************************************
+
+    <WebMethod()> Private Function TstConn(ByVal ds As String) As Boolean
+
+        ' Replace any ' with '' - added by Joe Dela Cruz
+        ds = Replace(ds, "'", "''")
+
+        Dim strConnect As String = ds & dsO
+        Dim SqlConn As New SqlConnection(strConnect)
+
+        Try
+            Dim sqlCmd As New SqlCommand("SELECT connect FROM tstConnect", SqlConn)
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return True
+
+        Catch ex As SqlException
+            Return False
+
+        Finally ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Error Handling "
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   Send email to admin@virtualconstruction.net
+    '************************************************************************
+
+    <WebMethod()> Public Function SendErrEmail(ByVal Msg As String) As Boolean
+
+        Try
+            Dim mail As New Web.Mail.MailMessage()
+            SmtpMail.SmtpServer = "192.168.1.57"
+            mail.From = "admin@virtualconstruction.net"
+            mail.To = "it@virtualconstruction.net"
+            mail.Subject = "ERROR"
+            mail.Body = Msg
+            mail.BodyFormat = MailFormat.Text
+            SmtpMail.Send(mail)
+            Return True
+
+        Catch ex As Exception
+            Return False
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh              
+    '   Created Date:12/18/02                 
+    '   Modified Date:                          
+    '   Gets current IT person on duty
+    '************************************************************************
+
+    Private Function GetIT() As String()
+
+        Try
+            Dim SqlConn As New SqlConnection(strConn)
+            Dim sqlCmd As New SqlCommand("SELECT count(*) FROM it_duty", SqlConn)
+            Dim sqlDr As SqlDataReader
+            Dim cnt As Integer = Nothing
+
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlDr = sqlCmd.ExecuteReader
+            While sqlDr.Read
+                cnt = sqlDr.GetInt32(0)
+            End While
+            sqlDr.Close()
+
+            Dim x As Integer = 0
+            Dim result(cnt - 1) As String
+            Dim sqlCmd1 As New SqlCommand("SELECT name, nextel, email FROM it_duty WHERE onduty = 1", SqlConn)
+
+            sqlCmd1.CommandType = CommandType.Text
+            sqlDr = sqlCmd1.ExecuteReader
+
+            While sqlDr.Read
+                result(0) = sqlDr.GetValue(0).ToString 'name of person on duty
+                result(1) = sqlDr.GetValue(1).ToString 'phone number of person need to add the @page.nextel.com extension
+                result(2) = sqlDr.GetValue(2).ToString 'full email address of person
+            End While
+            sqlDr.Close()
+
+            SqlConn.Close()
+            Return result
+
+        Catch ex As SqlException
+            SqlConn.Close()
+            Dim result(1) As String
+            result(0) = "Error"
+            result(1) = ex.Number & "^" & ex.Message
+
+            Return result
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh                               Date: 9/5/02                 
+    '   Error function to insert msg into database for error tracking
+    '   Modified BY: Patricia Kline                             Date: 9/10/02                        
+    '                Joe Dela Cruz                              Date: 6/25/03
+    '   Changes:  gets the next msgid for user and updates only users tbl
+    '************************************************************************
+
+    <WebMethod()> Public Function SendMsgToDB(ByVal coid As Integer, ByVal pplid As Integer, ByVal Msg As String, ByVal errNum As Integer) As String
+
+        'need to figure out auto id # for inserting of msgs
+        Msg = Replace(Msg, "'", "")
+
+        Dim msgincr As Integer
+        Dim sqlConn2 As New SqlConnection(strConn)
+        Dim result As String
+
+        Try
+            ' Next line modified by Joe Dela Cruz
+            Dim sqlCmd As New SqlCommand("SELECT msgincr FROM users " & _
+                "WHERE peopleid = @pplid", sqlConn2)
+
+            sqlCmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            sqlConn2.Open()
+            msgincr = CInt(sqlCmd.ExecuteScalar)        ' added by Joe Dela Cruz            
+
+        Catch ex As SqlException
+            result = "Error^" & ex.Message & ex.Number.ToString
+            Return result
+
+        Finally         ' added by Joe Dela Cruz
+            If sqlConn2.State = ConnectionState.Open Then
+                sqlConn2.Close()
+            End If
+
+        End Try
+
+        Try
+            msgincr += 1
+            ' Next line modified by Joe Dela Cruz
+            Dim sqlCmd As New SqlCommand(LCase("INSERT INTO messages (msgid, msgfrom, msgsource, msg, status, subject) " & _
+                    "values (@msgincr,@pplid,@coid,@Msg,@errNum,'error')"), sqlConn2)
+
+            sqlCmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@coid", coid)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@Msg", Msg)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@errNum", errNum)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@msgincr", msgincr)    ' added by Joe Dela Cruz
+            If Not sqlConn2.State = ConnectionState.Open Then
+                sqlConn2.Open()
+            End If
+
+            sqlCmd.ExecuteNonQuery()
+
+        Catch ex As SqlException
+            result = "Error^" & ex.Message & ex.Number.ToString
+            Return result
+
+        Finally         ' added by Joe Dela Cruz
+            If sqlConn2.State = ConnectionState.Open Then
+                sqlConn2.Close()
+            End If
+
+        End Try
+
+        Try
+            ' Next line modified by Joe Dela Cruz
+            Dim sqlCmd1 As New SqlCommand("INSERT INTO messagestousers (msgid, msgfrom, msgsource, msgto, msgfolder) " & _
+                "VALUES (@msgincr,@pplid,@coid, 1, 'errors')", sqlConn2)
+
+            sqlCmd1.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd1.Parameters.Add("@coid", coid)    ' added by Joe Dela Cruz            
+            sqlCmd1.Parameters.Add("@msgincr", msgincr)    ' added by Joe Dela Cruz
+            If Not sqlConn2.State = ConnectionState.Open Then
+                sqlConn2.Open()
+            End If
+
+            sqlCmd1.ExecuteNonQuery()
+
+            If errNum <> 0 Then
+                Call SendErrEmail(Msg & errNum)
+            End If
+
+        Catch ex As SqlException
+            result = "Error^" & ex.Message & ex.Number.ToString
+            Return result
+
+        Finally         ' added by Joe Dela Cruz
+            If sqlConn2.State = ConnectionState.Open Then
+                sqlConn2.Close()
+            End If
+
+        End Try
+
+        Try
+            ' Next line modified by Joe Dela Cruz
+            Dim sqlCmd2 As New SqlCommand("UPDATE users SET msgincr = @msgincr WHERE peopleid = @pplid", sqlConn2)
+
+            sqlCmd2.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd2.Parameters.Add("@msgincr", msgincr)    ' added by Joe Dela Cruz            
+            If Not sqlConn2.State = ConnectionState.Open Then
+                sqlConn2.Open()
+            End If
+
+            sqlCmd2.ExecuteNonQuery()
+
+        Catch ex As SqlException
+            result = "Error^" & ex.Message & ex.Number.ToString
+            Return result
+
+        Finally         ' added by Joe Dela Cruz
+            If sqlConn2.State = ConnectionState.Open Then
+                sqlConn2.Close()
+            End If
+
+        End Try
+
+        Return "True"
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: Carlos Salazar              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   Send email to IT@virtualconstruction.net Customer Service
+    '************************************************************************
+
+    <WebMethod()> Public Function dserror(ByVal errNbr As String, ByVal errMsg As String) As String
+
+        Return errNbr & "^" & errMsg
+
+    End Function
+    '************************************************************************
+    '   Programmer: Carlos Salazar              
+    '   Created Date:8/27/02                 
+    '   Modified Date:                          
+    '   Send email to IT@virtualconstruction.net Customer Service
+    '************************************************************************
+
+    <WebMethod()> Public Function SendTextMsg(ByVal Msg As String) As Boolean
+
+        Try
+            Dim results() As String = GetIT()
+
+            Dim mail As New Web.Mail.MailMessage()
+            SmtpMail.SmtpServer = "192.168.1.57"
+            mail.From = "sqlserver@wcpci.com"
+            mail.To = results(1) & "@messaging.sprintpcs.com"
+            mail.Subject = "VCNET ERROR"
+            mail.Body = Msg
+            mail.BodyFormat = MailFormat.Text
+            SmtpMail.Send(mail)
+            Return True
+
+        Catch ex As Exception
+            Return False
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Select Project "
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh                              Date:  4/07/03                 
+    '   Modified By: Joe Dela Cruz                             Date:  6/23/03
+    '   Event: Returns array of all companyid's associated to user
+    '************************************************************************
+
+    <WebMethod()> Public Function GetUsersCompanies(ByVal pplid As Integer) As DataSet
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim strSQL As String
+        Dim ds As New DataSet()
+
+        strSQL = "SELECT companyid, name " & _
+                    "FROM companies " & _
+                    "WHERE companyid IN (SELECT companyid FROM userstobuildersco WHERE peopleid = @pplid) " & _
+                    "ORDER by name"
+
+        Try
+            Dim sqlCmd As New SqlCommand(strSQL, SqlConn)
+            sqlCmd.Parameters.Add("@pplid", pplid)
+            sqlCmd.CommandType = CommandType.Text
+
+            Dim da As New SqlDataAdapter(sqlCmd)
+            sqlCmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw New Exception(ex.Message)
+
+        Finally     ' Added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date: 6/23/03 by Joe Dela Cruz                                                     
+    ' Event: Get companyid and company name of all developers and return as dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetDevelopers() As DataSet
+
+        Dim ds As New DataSet()
+        Dim SqlConn As New SqlConnection(strConn)   ' moved from Try by Joe Dela Cruz
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT companyid, name FROM companies " & _
+                            "WHERE companyid in (SELECT companyid FROM buildersco) " & _
+                             "ORDER BY name"
+
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        Finally     ' Added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " General "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date: 6/23/03 by Joe Dela Cruz                                                     
+    ' Event: Get project id and project name for developer selected 
+    '        for projects that company has access to and return as dataset
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetProjectsCoAccess(ByVal devid As Integer, ByVal coid As Integer) As DataSet
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim ds As New DataSet()
+
+        Try
+            Dim sqlstmt As String
+            sqlstmt = "SELECT projectid, name FROM projects " & _
+                        "WHERE companyid in (SELECT companyid FROM companies WHERE companyid = @devid) " & _
+                        "AND projectid in (SELECT projectid FROM companiesaccesstoprojects WHERE companyid = @coid)" & _
+                        "ORDER BY name"
+
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+            Sqlcmd.Parameters.Add("@devid", devid)
+            Sqlcmd.Parameters.Add("@coid", coid)
+            Sqlcmd.CommandType = CommandType.Text
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            da.Fill(ds)
+
+            Return ds
+
+        Catch ex As SqlException
+            ' SqlConn.Close() statement moved to Finally below            
+
+        Finally     ' Added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:  3/25/03 by Joe Dela Cruz                        
+    '   Event: send all sirnbrs in dataset for selected project to vcnet
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_getdocs(ByVal companyid As Integer, ByVal projid As Integer) As DataSet
+
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)   ' moved out of Try by Joe Dela Cruz
+
+        If projid = 0 Then
+            ' Next line modified by Joe Dela Cruz
+            sqlstmt = "SELECT documentid, left(docfilename, len(docfilename)-4) " & _
+                "FROM documents " & _
+                "WHERE documentid in (SELECT documentid FROM inspectionreportdetails) " & _
+                "AND projectid in (select projectid from projects where companyid = @companyid) " & _
+                "ORDER BY docfilename"
+        Else
+            ' Next line modified by Joe Dela Cruz
+            sqlstmt = "SELECT documentid, left(docfilename, len(docfilename)-4) " & _
+                "FROM documents " & _
+                "WHERE documentid in (SELECT documentid FROM inspectionreportdetails) " & _
+                "AND projectid = @projid " & _
+                "ORDER BY docfilename"
+        End If
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+
+            cmd.Parameters.Add("@companyid", companyid)    ' added by Joe Dela Cruz
+            cmd.Parameters.Add("@projid", projid)    ' added by Joe Dela Cruz
+            cmd.CommandType = CommandType.Text
+            Dim da As New SqlDataAdapter(cmd)
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            ' moved SqlConn.Close() to Finally below
+
+        Finally         ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " SIRs "
+
+#Region " Reminders "
+
+    '*******************************************************************************
+    '   Programmer:  Joe Dela Cruz                                                 *
+    '   Created Date: 02/3/03                                                      *
+    '   Modified Date:  4/22/03                                                    *
+    '   Check if company has divisions checking divisions table                    *
+    '   using sending company id parameter                                         *
+    '*******************************************************************************
+
+    <WebMethod()> Public Function CheckCompanyDivisions(ByVal companyid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim strSQL As String = "SELECT count(*) FROM divisions WHERE companyid = @companyid"
+        Dim cmd As New SqlCommand(strSQL, SqlConn)
+        Dim cnt As Integer
+
+        Try
+            cmd.Parameters.Add("@companyid", companyid)
+            cmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            cnt = CInt(cmd.ExecuteScalar.ToString)
+            SqlConn.Close()
+
+            Return cnt.ToString
+
+        Catch ex As SqlException
+            Return ex.Message & "^" & ex.Number.ToString
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '   Programmer:  Joe Dela Cruz                                                 *
+    '   Created Date: 02/3/03                                                      *
+    '   Modified Date:  4/22/03                                                    *
+    '   Get company information for companies with no division                     *
+    '   using sending company id parameter                                         *
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetCompanyInfo(ByVal companyid As Integer) As String()
+
+        Dim SqlConn As New SqlConnection(strConn)
+
+        Try
+            Dim sqlDr As SqlDataReader
+            Dim result(5) As String
+            Dim cnt As Integer = Nothing
+
+            SqlConn.Open()
+
+            Dim sqlCmd As New SqlCommand("SELECT address,city,state,zip,phone,fax FROM companies WHERE companyid = @companyid", SqlConn)
+            sqlCmd.Parameters.Add("@companyid", companyid)
+            sqlCmd.CommandType = CommandType.Text
+            sqlDr = sqlCmd.ExecuteReader
+
+            While sqlDr.Read
+                result(0) = sqlDr.GetValue(0).ToString 'company address
+                result(1) = sqlDr.GetValue(1).ToString 'company city
+                result(2) = sqlDr.GetValue(2).ToString 'company state
+                result(3) = sqlDr.GetValue(3).ToString 'company zip
+                result(4) = sqlDr.GetValue(4).ToString 'company phone
+                result(5) = sqlDr.GetValue(5).ToString 'company fax                
+            End While
+
+            sqlDr.Close()
+            Return result
+
+        Catch ex As SqlException
+            Dim result(2) As String
+            result(0) = "Error"
+            result(1) = CStr(ex.Number)
+            result(2) = ex.Message
+            Return result
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '   Programmer:  Joe Dela Cruz                                                 *
+    '   Created Date: 02/3/03                                                      *
+    '   Modified Date:  4/22/03                                                    * 
+    '                   6/25/03 by Joe Dela Cruz                                   *
+    '   Get division information for companies                                     * 
+    '   using sending company id parameter                                         *
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetDivisionInfo(ByVal companyid As Integer, ByVal division As String) As String()
+
+        Dim SqlConn As New SqlConnection(strConn)
+
+        Try
+            Dim sqlCmd As New SqlCommand("SELECT count(*) FROM divisions WHERE companyid=@companyid AND division=@division", SqlConn)
+            Dim sqlDr As SqlDataReader
+            Dim cnt As Integer = Nothing
+
+            sqlCmd.Parameters.Add("@companyid", companyid)
+            sqlCmd.Parameters.Add("@division", division)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            cnt = CInt(sqlCmd.ExecuteScalar.ToString)   ' added by Joe Dela Cruz
+
+            Dim result(5) As String
+            If cnt = 0 Then
+                SqlConn.Close()
+                result(0) = "Error"
+                result(1) = "0"
+                result(2) = "No record for this division"
+                Return result
+            End If
+
+            Dim sqlCmd1 As New SqlCommand("SELECT address,city,state,zip,phone,fax FROM divisions WHERE companyid = @companyid AND division=@division", SqlConn)
+            sqlCmd1.Parameters.Add("@companyid", companyid)
+            sqlCmd1.Parameters.Add("@division", division)
+            sqlCmd1.CommandType = CommandType.Text
+            sqlDr = sqlCmd1.ExecuteReader
+
+            While sqlDr.Read
+                result(0) = sqlDr.GetValue(0).ToString 'division address
+                result(1) = sqlDr.GetValue(1).ToString 'division city
+                result(2) = sqlDr.GetValue(2).ToString 'division state
+                result(3) = sqlDr.GetValue(3).ToString 'division zip
+                result(4) = sqlDr.GetValue(4).ToString 'division phone
+                result(5) = sqlDr.GetValue(5).ToString 'division fax                
+            End While
+
+            sqlDr.Close()
+            Return result
+
+        Catch ex As SqlException
+            Dim result(2) As String
+            result(0) = "Error"
+            result(1) = CStr(ex.Number)
+            result(2) = ex.Message
+            Return result
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '   Programmer:  Joe Dela Cruz                                                 *
+    '   Created Date: 02/3/03                                                      *
+    '   Modified Date:  4/21/03                                                    *
+    '   Get divisions that a reminder needs to be sent out for all companies       *
+    '   using sending company id parameter                                         *
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetDivisionReminders(ByVal sendingcompanyid As Integer) As DataSet
+
+        Dim strSQL As String
+
+        ' Use two queries joined with UNION 
+        ' to get all divisions that need to send out reminders
+        strSQL = "SELECT dbo.divisions.division, dbo.divisions.divisiondesc " & _
+                "FROM dbo.divisions INNER JOIN " & _
+                    "dbo.projectstodivisions ON dbo.divisions.companyid = dbo.projectstodivisions.companyid AND  " & _
+                    " dbo.divisions.division = dbo.projectstodivisions.division " & _
+                 "WHERE (dbo.projectstodivisions.projectid IN " & _
+                    "(SELECT dbo.iresults.projectid " & _
+                    "FROM dbo.people INNER JOIN " & _
+                        "dbo.iresults ON dbo.people.peopleid = dbo.iresults.ins_peopleid INNER JOIN " & _
+                        "dbo.inspectionreportdetails ON dbo.iresults.projectid = dbo.inspectionreportdetails.projectid AND " & _
+                        "dbo.iresults.iresultsid = dbo.inspectionreportdetails.iresultsid LEFT OUTER JOIN " & _
+                        "dbo.inspectionreportreminders ON dbo.inspectionreportdetails.documentid = dbo.inspectionreportreminders.documentid AND " & _
+                        "dbo.inspectionreportdetails.projectid = dbo.inspectionreportreminders.projectid AND " & _
+                        "dbo.inspectionreportdetails.iresultsid = dbo.inspectionreportreminders.iresultsid " & _
+                    "WHERE (dbo.inspectionreportdetails.sdate IS NULL) AND (dbo.iresults.attention = 1) AND (dbo.iresults.projectid <> 1) " & _
+                    "GROUP BY dbo.iresults.iresultsid, dbo.iresults.projectid " & _
+                    "HAVING ((COUNT(dbo.inspectionreportreminders.reminder) + 1) IN " & _
+                        "(SELECT remindernbr " & _
+                        "FROM dbo.sirmgmt " & _
+                        "WHERE (remindernbr = 1 AND DATEDIFF(day, MAX(iresults.inspectiondate), GETDATE()) >= dayinterval) OR " & _
+                            "(remindernbr > 1 AND DATEDIFF(day, MAX(inspectionreportreminders.reminder), GETDATE()) >= dayinterval))))) AND " & _
+                        "(dbo.projectstodivisions.companyid = 2) " & _
+                "GROUP BY dbo.divisions.division, dbo.divisions.divisiondesc "
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim ds As New DataSet()
+        Try
+            Dim cmd As New SqlCommand(strSQL, SqlConn)
+            cmd.CommandType = CommandType.Text
+            cmd.Parameters.Add("@sendingcompanyid", sendingcompanyid)
+            Dim da As New SqlDataAdapter(cmd)
+            da.Fill(ds)
+            Return ds
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '   Programmer:  Joe Dela Cruz                                                 *
+    '   Created Date: 01/21/03                                                     *
+    '   Modified Date: 05/08/03                                                    *
+    '                   6/25/03 by Joe Dela Cruz                                   *
+    '   Get SIR Open Items data to use in SIR Open Items Report for a specific     *
+    '   project id and reminder number that are passed in as parameters.           *
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetSIROpenItems(ByVal projid As Integer, ByVal reminderno As Integer) As DataSet
+
+        Dim strSQL As String
+
+        ' If reminders for iresultsid are in inspectionreportreminders table,
+        ' use the SQL statement below to query which iresultsids are on 
+        ' the reminder number passed in as a parameter
+        ' Next line modified by Joe Dela Cruz
+        If reminderno > 0 Then
+            strSQL = "SELECT documents.documentid,LEFT(documents.docfilename, LEN(documents.docfilename) - 4) AS sirnbr, " & _
+                        "dbo.inspectionreportreminders.iresultsid, iresults.inspectiondate, inspectioncodes.cat1, " & _
+                        "iresults.lot, iresults.phase, projects.name, iresults.bldg, companies.name AS CompanyName " & _
+                    "FROM dbo.inspectionreportreminders INNER JOIN " & _
+                          "dbo.iresults ON dbo.inspectionreportreminders.projectid = dbo.iresults.projectid AND  " & _
+                          "dbo.inspectionreportreminders.iresultsid = dbo.iresults.iresultsid INNER JOIN " & _
+                          "dbo.inspectionreportdetails ON dbo.inspectionreportreminders.projectid = dbo.inspectionreportdetails.projectid AND  " & _
+                          "dbo.inspectionreportreminders.iresultsid = dbo.inspectionreportdetails.iresultsid INNER JOIN " & _
+                          "dbo.inspectioncodes ON dbo.iresults.code = dbo.inspectioncodes.code INNER JOIN " & _
+                          "dbo.projects ON dbo.iresults.projectid = dbo.projects.projectid INNER JOIN " & _
+                          "dbo.companies ON projects.companyid = companies.companyid INNER JOIN " & _
+                          "dbo.documents ON dbo.inspectionreportdetails.documentid = dbo.documents.documentid " & _
+                    "WHERE (iresults.projectid = @projid) AND (inspectionreportdetails.sdate Is NULL) " & _
+                    "AND DATEDIFF(day,inspectionreportreminders.reminder,GETDATE()) >= (SELECT DISTINCT dbo.sirmgmt.dayinterval FROM dbo.iresults INNER JOIN dbo.people ON dbo.iresults.ins_peopleid = dbo.people.peopleid INNER JOIN dbo.sirmgmt ON dbo.people.companyid = dbo.sirmgmt.companyid WHERE remindernbr= @reminderno AND iresults.projectid= @projid AND deliverymethod='fax') " & _
+                    "GROUP BY documents.documentid,LEFT(documents.docfilename, LEN(documents.docfilename) - 4),  dbo.inspectionreportreminders.iresultsid, dbo.iresults.inspectiondate, dbo.inspectioncodes.cat1, " & _
+                    "iresults.lot,iresults.phase,dbo.projects.name, iresults.bldg,companies.name " & _
+                    "HAVING COUNT(*) = @reminderno " & _
+                    "ORDER BY iresults.phase,inspectionreportreminders.iresultsid"
+
+            ' If there are iresultsids with no reminders sent out yet, use the following
+            ' SQL statement below to query those iresultsids
+        Else
+            ' Next line modified by Joe Dela Cruz
+            strSQL = "SELECT documents.documentid,LEFT(documents.docfilename, LEN(documents.docfilename) - 4) AS sirnbr, " & _
+                        "inspectionreportdetails.iresultsid, iresults.inspectiondate, inspectioncodes.cat1, " & _
+                    "iresults.lot, iresults.phase, projects.name, iresults.bldg, companies.name AS CompanyName " & _
+                    "FROM inspectionreportdetails INNER JOIN " & _
+                      "iresults ON inspectionreportdetails.projectid = iresults.projectid AND " & _
+                      "inspectionreportdetails.iresultsid = iresults.iresultsid INNER JOIN " & _
+                      "inspectioncodes ON iresults.code = inspectioncodes.code INNER JOIN " & _
+                      "documents ON inspectionreportdetails.documentid = documents.documentid INNER JOIN " & _
+                      "projects ON inspectionreportdetails.projectid = projects.projectid INNER JOIN " & _
+                      "companies ON projects.companyid = companies.companyid " & _
+                    "WHERE (iresults.projectid = @projid) AND (inspectionreportdetails.sdate Is NULL) " & _
+                     "AND inspectionreportdetails.iresultsid NOT IN (SELECT inspectionreportreminders.iresultsid FROM inspectionreportreminders WHERE projectid = @projid) " & _
+                     "AND DATEDIFF(day,iresults.inspectiondate,GETDATE()) >= (SELECT DISTINCT dbo.sirmgmt.dayinterval FROM dbo.iresults INNER JOIN dbo.people ON dbo.iresults.ins_peopleid = dbo.people.peopleid INNER JOIN dbo.sirmgmt ON dbo.people.companyid = dbo.sirmgmt.companyid WHERE remindernbr= 1 AND iresults.projectid = @projid AND deliverymethod='fax') " & _
+                    "ORDER BY iresults.phase,inspectionreportdetails.iresultsid "
+        End If
+
+        Dim SqlConn As New SqlConnection(strConn)
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(strSQL, SqlConn)
+
+            cmd.Parameters.Add("@projid", projid)           ' added by Joe Dela Cruz
+            cmd.Parameters.Add("@reminderno", reminderno)   ' added by Joe Dela Cruz
+            cmd.CommandType = CommandType.Text
+            Dim da As New SqlDataAdapter(cmd)
+
+            da.Fill(ds)
+            Return ds
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '   Programmer:  Joe Dela Cruz                                                 *
+    '   Created Date: 02/3/03                                                      *
+    '   Modified Date:  4/21/03                                                    *
+    '   Get each project that a reminder needs to be sent out for all companies    *
+    '   using sending company id parameter and division parameter                  *
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetSIRReminders(ByVal sendingcompanyid As Integer, ByVal division As String) As DataSet
+
+        Dim strSQL As String
+        strSQL = "sp_GetSIRReminders"
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim ds As New DataSet()
+
+        Try
+            Dim cmd As New SqlCommand(strSQL, SqlConn)
+            cmd.CommandType = CommandType.StoredProcedure
+            cmd.Parameters.Add("@sendingcompanyid", sendingcompanyid)
+            cmd.Parameters.Add("@division", division)
+            Dim da As New SqlDataAdapter(cmd)
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Call dserror(CStr(ex.Number), ex.Message)
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                       
+    '   Event:  update
+    '************************************************************************
+
+    <WebMethod()> Public Function updatereminder(ByVal docid As Integer, ByVal projid As Integer, ByVal iresultsid As String) As String
+
+        iresultsid = Replace(iresultsid, "'", "''") ' added by Joe Dela Cruz
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "INSERT INTO inspectionreportreminders (documentid, projectid, iresultsid, reminder) " & _
+                    "VALUES (@docid,@projid,@iresultsid,'" & Today.ToShortDateString & "')"
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@docid", docid)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@projid", projid)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@iresultsid", iresultsid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Reminders OLD "
+
+    '*******************************************************************************
+    '   Programmer:  Joe Dela Cruz                                                 *
+    '   Created Date: 02/3/03                                                      *
+    '   Modified Date:  4/22/03                                                    * 
+    '                   6/25/03 by Joe Dela Cruz                                   *
+    '   Get division information for companies                                     * 
+    '   using sending company id parameter                                         *
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetDivisionInfoOld(ByVal division As String) As String()
+
+        Dim SqlConn As New SqlConnection(strConnIT)
+
+        Try
+            Dim sqlCmd As New SqlCommand("SELECT count(*) FROM tbldivision WHERE code= @division", SqlConn)
+            Dim sqlDr As SqlDataReader
+            Dim cnt As Integer = Nothing
+
+            sqlCmd.Parameters.Add("@division", division)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            cnt = CInt(sqlCmd.ExecuteScalar.ToString)   ' added by Joe Dela Cruz
+
+            Dim result(5) As String
+            If cnt = 0 Then
+                SqlConn.Close()
+                result(0) = "Error"
+                result(1) = "0"
+                result(2) = "No record for this division"
+                Return result
+            End If
+
+            Dim sqlCmd1 As New SqlCommand("SELECT address, city, state, zip, phone2, fax FROM tbldivision WHERE code= @division", SqlConn)
+            sqlCmd1.Parameters.Add("@division", division)
+            sqlCmd1.CommandType = CommandType.Text
+            sqlDr = sqlCmd1.ExecuteReader
+
+            While sqlDr.Read
+                result(0) = sqlDr.GetValue(0).ToString 'division address
+                result(1) = sqlDr.GetValue(1).ToString 'division city
+                result(2) = sqlDr.GetValue(2).ToString 'division state
+                result(3) = sqlDr.GetValue(3).ToString 'division zip
+                result(4) = sqlDr.GetValue(4).ToString 'division phone
+                result(5) = sqlDr.GetValue(5).ToString 'division fax                
+            End While
+
+            sqlDr.Close()
+            Return result
+
+        Catch ex As SqlException
+            Dim result(2) As String
+            result(0) = "Error"
+            result(1) = CStr(ex.Number)
+            result(2) = ex.Message
+            Return result
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '   Programmer:  Patricia Kline
+    '   Created Date: 07/22/03      
+    '   Modified Date:             
+    '   Get divisions that a reminder needs to be sent out for all companies       
+    '   using sending company id parameter                                         
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetDivisionRemindersOld() As DataSet
+
+        Dim strSQL As String
+        strSQL = "SELECT DISTINCT dbo.qrySirReminder.Division, dbo.tblDivision.Location " & _
+                "FROM dbo.tblDivision INNER JOIN " & _
+                    "dbo.qrySirReminder ON dbo.tblDivision.Code = dbo.qrySirReminder.Division " & _
+                "ORDER BY dbo.qrySirReminder.Division"
+
+        Dim SqlConn As New SqlConnection(strConnIT)
+        Dim ds As New DataSet()
+        Try
+            Dim cmd As New SqlCommand(strSQL, SqlConn)
+            cmd.CommandType = CommandType.Text
+            Dim da As New SqlDataAdapter(cmd)
+            da.Fill(ds)
+            Return ds
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '   Programmer:  Joe Dela Cruz                                                 *
+    '   Created Date: 01/21/03                                                     *
+    '   Modified Date: 05/08/03                                                    *
+    '   Get SIR Open Items data to use in SIR Open Items Report for a specific     *
+    '   project id and reminder number that are passed in as parameters.           *
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetSIROpenItemsOld(ByVal projid As Integer, ByVal reminderno As Integer) As DataSet
+
+        Dim strSQL As String
+
+        strSQL = "SELECT 0 as documentid, sir# as sirnbr, itemserial# as iresultsid, " & _
+                            "inspdate as inspectiondate, inspectiontype as cat1, " & _
+                            "lotbldg as lot, phase, project as name, '' as bldg, " & _
+                            "developer as companyname " & _
+                "FROM infotracker.dbo.qrySirReminder " & _
+                "WHERE ProjID = @projid "
+
+        If reminderno = 1 Then
+            strSQL = strSQL & "AND Reminder1 Is Null "
+        ElseIf reminderno = 2 Then
+            strSQL = strSQL & "AND Reminder2 Is Null AND Reminder1 < GetDate()-7 "
+        Else
+            strSQL = strSQL & "AND Reminder3 Is Null AND Reminder2 < GetDate()-7 "
+        End If
+
+        Dim SqlConn As New SqlConnection(strConnIT)
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(strSQL, SqlConn)
+            cmd.Parameters.Add("@projid", projid)
+            cmd.Parameters.Add("@reminderno", reminderno)
+            cmd.CommandType = CommandType.Text
+
+            Dim da As New SqlDataAdapter(cmd)
+            da.Fill(ds)
+
+            Return ds
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function GetReminderOld(ByVal division As String, ByVal reminder As Integer) As DataSet
+
+        Dim SqlConn As New SqlConnection(strConnIT)
+        Dim ds As New DataSet()
+
+        Dim strSQL As String
+        strSQL = "SELECT project as projectname, id as projectid, developer as companyname, " & _
+                        "supername as companycontact, superfax as companyfax, remindertext, " & _
+                        "getdate() as reminder, 0 as remindernumber " & _
+                 "FROM qrySirFax f, sirmgmt s "
+
+        If reminder = 1 Then
+            strSQL = strSQL & "WHERE [ID] in (SELECT ProjID FROM qrySirReminder WHERE Reminder1 Is Null AND division = @division) "
+        ElseIf reminder = 2 Then
+            strSQL = strSQL & "WHERE [ID] in (SELECT ProjID FROM qrySirReminder WHERE Reminder2 Is Null and Reminder1 < GetDate()-7 AND division = @division) "
+        ElseIf reminder = 3 Then
+            strSQL = strSQL & "WHERE [ID] in (SELECT ProjID FROM qrySirReminder WHERE Reminder3 Is Null and Reminder2 < GetDate()-7 AND division = @division) "
+        End If
+
+        strSQL = strSQL & "AND remindernbr = @reminder"
+
+        Try
+            Dim cmd As New SqlCommand(strSQL, SqlConn)
+            cmd.CommandType = CommandType.Text
+            cmd.Parameters.Add("@division", division)
+            cmd.Parameters.Add("@reminder", reminder)
+            Dim da As New SqlDataAdapter(cmd)
+            da.Fill(ds)
+            Return ds
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                       
+    '   Event:  update
+    '************************************************************************
+
+    <WebMethod()> Public Function UpdateReminder1Old(ByVal sir As String, ByVal iresultsid As String) As String
+
+        iresultsid = Replace(iresultsid, "'", "''") ' added by Joe Dela Cruz
+
+        Dim SqlConn As New SqlConnection(strConnIT)
+        Dim sqlstmt As String
+
+        sqlstmt = "UPDATE [tblSIR-Item] " & _
+                    "SET Reminder1 = '" & Today.ToShortDateString & "' " & _
+                    "WHERE sir# = @sir AND itemserial# = @iresultsid"
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@sir", sir)
+            sqlCmd.Parameters.Add("@iresultsid", iresultsid)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                       
+    '   Event:  update
+    '************************************************************************
+
+    <WebMethod()> Public Function UpdateReminder2Old(ByVal sir As String, ByVal iresultsid As String) As String
+
+        iresultsid = Replace(iresultsid, "'", "''") ' added by Joe Dela Cruz
+
+        Dim SqlConn As New SqlConnection(strConnIT)
+        Dim sqlstmt As String
+
+        sqlstmt = "UPDATE [tblSIR-Item] " & _
+                    "SET Reminder2 = '" & Today.ToShortDateString & "' " & _
+                    "WHERE sir# = @sir AND itemserial# = @iresultsid"
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@sir", sir)
+            sqlCmd.Parameters.Add("@iresultsid", iresultsid)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                       
+    '   Event:  update
+    '************************************************************************
+
+    <WebMethod()> Public Function UpdateReminder3Old(ByVal sir As String, ByVal iresultsid As String) As String
+
+        iresultsid = Replace(iresultsid, "'", "''") ' added by Joe Dela Cruz
+
+        Dim SqlConn As New SqlConnection(strConnIT)
+        Dim sqlstmt As String
+
+        sqlstmt = "UPDATE [tblSIR-Item] " & _
+                    "SET Reminder3 = '" & Today.ToShortDateString & "' " & _
+                    "WHERE sir# = @sir AND itemserial# = @iresultsid"
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@sir", sir)
+            sqlCmd.Parameters.Add("@iresultsid", iresultsid)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Phone "
+
+    '*******************************************************************************
+    '   Programmer:  Carlos Salazar                            
+    '   Created Date: 11/11/02                                 
+    '   Modified Date: 6/23/03 by Joe Dela Cruz                                        
+    '   Event:  Select Statement for Employee name for specific company
+    '*******************************************************************************
+
+    <WebMethod()> Public Function Get_CompanyEmployees(ByVal companyid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+        Dim SqlConn As New SqlConnection(strConn)   ' moved from Try by Joe Dela Cruz
+
+        Try
+            ' Next line modified by Joe Dela Cruz
+            Dim Sqlcmd As New SqlCommand("SELECT peopleid, fname + ' ' + lname AS name FROM people WHERE companyid = @companyid ORDER BY fname ASC", SqlConn)
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.Parameters.Add("@companyid", companyid)    ' added by Joe Dela Cruz
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        Finally ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:  6/25/03 by Joe Dela Cruz
+    '   Event: get phone and fax number of employee selected
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_getpplphone(ByVal pplid As Integer) As String()
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "SELECT phone, fax, email FROM people WHERE peopleid = @pplid"
+
+        Try
+            Dim result(2) As String
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+
+            SqlConn.Open()
+
+            Dim sqlDr As SqlDataReader
+            sqlDr = sqlCmd.ExecuteReader
+
+            While sqlDr.Read
+                result(0) = sqlDr.GetValue(0).ToString
+                result(1) = sqlDr.GetValue(1).ToString
+                result(2) = sqlDr.GetValue(2).ToString
+            End While
+            sqlDr.Close()
+
+            Return result
+
+        Catch ex As SqlException
+            Dim result(2) As String
+            result(0) = "Error"
+            result(1) = CStr(ex.Number)
+            result(2) = ex.Message
+            Return result
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                       
+    '   Event: get phone and fax of project selected
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_getprojphone(ByVal projid As Integer) As String()
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "SELECT phone, fax FROM projects WHERE projectid = @projid"
+
+        Try
+            Dim result(1) As String
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@projid", projid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+
+            SqlConn.Open()
+
+            Dim sqlDr As SqlDataReader
+            sqlDr = sqlCmd.ExecuteReader
+
+            While sqlDr.Read
+                result(0) = sqlDr.GetValue(0).ToString
+                result(1) = sqlDr.GetValue(1).ToString
+            End While
+            sqlDr.Close()
+
+            Return result
+
+        Catch ex As SqlException
+            Dim result(2) As String
+            result(0) = "Error"
+            result(1) = CStr(ex.Number)
+            result(2) = ex.Message
+            Return result
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                      
+    '   Event: update phone and fax number 
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_updatepplphone(ByVal pplid As Integer, ByVal phone As String, ByVal fax As String, ByVal email As String) As String
+
+        phone = Replace(phone, "'", "''")       ' added by Joe Dela Cruz
+        fax = Replace(fax, "'", "''")           ' added by Joe Dela Cruz
+        email = Replace(email, "'", "''")       ' added by Joe Dela Cruz
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = LCase("UPDATE people " & _
+                            "SET phone = @phone," & _
+                                "fax = @fax," & _
+                                "email = @email " & _
+                        "WHERE peopleid = @pplid")
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@phone", phone)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@fax", fax)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@email", email)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                       
+    '   Event: update phone and fax number 
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_updateprojphone(ByVal projid As Integer, ByVal phone As String, ByVal fax As String) As String
+
+        phone = Replace(phone, "'", "''")       ' added by Joe Dela Cruz
+        fax = Replace(fax, "'", "''")           ' added by Joe Dela Cruz
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = LCase("UPDATE projects " & _
+                            "SET phone = @phone," & _
+                                "fax = @fax " & _
+                        "WHERE projectid = @projid")
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@phone", phone)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@fax", fax)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@projid", projid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Notification "
+
+    <WebMethod()> Public Function Get_CompanyUsers(ByVal companyid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+        Dim SqlConn As New SqlConnection(strConn)   ' moved from Try statement by Joe Dela Cruz
+        Dim sqlstmt As String
+        ' Next line modified by Joe Dela Cruz to add @companyid
+        sqlstmt = "SELECT peopleid, fname + ' ' + lname AS name " & _
+                    "FROM people WHERE companyid = @companyid " & _
+                    "AND peopleid in (SELECT peopleid FROM users) " & _
+                    "ORDER BY fname ASC"
+
+        Try
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.Parameters.Add("@companyid", companyid)    ' added by Joe Dela Cruz    
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        Finally     ' Added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date: 6/25/03 by Joe Dela Cruz                    
+    '   Event:  check if person is in db and if not, add project accesss
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_addprojaccess(ByVal pplid As Integer, ByVal projid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim cnt As Integer = 0
+
+        Dim sqlstmt As String
+        ' next line modified by JOe Dela Cruz
+        sqlstmt = "SELECT count(*) FROM usersaccesstoprojects " & _
+                        "WHERE peopleid = @pplid " & _
+                        "AND projectid = @projid"
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@projid", projid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            cnt = CInt(sqlCmd.ExecuteScalar)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO usersaccesstoprojects (peopleid, projectid)  " & _
+                                        "VALUES (@pplid,@projid)"
+                Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+                cmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+                cmd.Parameters.Add("@projid", projid)    ' added by Joe Dela Cruz
+                cmd.CommandType = CommandType.Text
+                cmd.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date: 6/25/03 by Joe Dela Cruz                         
+    '   Event: send all sir items in dataset for selected sirnbr to vcnet
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_getnotifcations(ByVal coid As Integer) As DataSet
+
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)   ' moved out of Try by Joe Dela Cruz
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "SELECT dbo.projects.name AS projname, dbo.people.fname + ' ' + dbo.people.lname AS notify, dbo.projects.projectid, dbo.people.peopleid " & _
+                    "FROM dbo.people INNER JOIN dbo.sirnotifications ON dbo.people.peopleid = dbo.sirnotifications.peopleid INNER JOIN " & _
+                        " dbo.projects ON dbo.sirnotifications.projectid = dbo.projects.projectid " & _
+                    "WHERE (dbo.projects.companyid = @coid) " & _
+                    "ORDER BY name"
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+
+            cmd.Parameters.Add("@coid", coid)    ' added by Joe Dela Cruz
+            cmd.CommandType = CommandType.Text
+            Dim da As New SqlDataAdapter(cmd)
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+
+        Finally         ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Reprint "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  3/29/03                                               
+    ' Modified Date:  6/25/03 by Joe Dela Cruz                                                    
+    ' Event: Get sir items
+    '*******************************************************************************
+
+    <WebMethod()> Public Function Get_SirReminder(ByVal docid As Integer) As DataSet
+
+        Dim ds As New DataSet()
+        Dim SqlConn As New SqlConnection(strConn)   ' moved out of Try by Joe Dela Cruz
+
+        Try
+            Dim sqlstmt As String
+            ' Next line modified by Joe Dela Cruz
+            sqlstmt = "SELECT dbo.companies.name AS coname, dbo.iresults.iresultsid, dbo.iresults.inspectiondate, dbo.iresults.phase, dbo.iresults.lot, dbo.iresults.bldg, " & _
+                            "dbo.iresults.unit, dbo.iresults.plantype, dbo.iresults.comment, dbo.iresults.attention, dbo.inspectioncodes.tradename, dbo.projects.name AS projname, " & _
+                            "dbo.people.fname + ' ' + dbo.people.lname AS super, people_1.fname AS inspector, left(dbo.documents.docfilename, len(dbo.documents.docfilename) - 4) as sir " & _
+                        "FROM dbo.iresults INNER JOIN " & _
+                            "dbo.projects ON dbo.iresults.projectid = dbo.projects.projectid INNER JOIN " & _
+                            "dbo.companies ON dbo.projects.companyid = dbo.companies.companyid INNER JOIN " & _
+                            "dbo.inspectioncodes ON dbo.iresults.code = dbo.inspectioncodes.code INNER JOIN " & _
+                            "dbo.superintendantsprojects ON dbo.iresults.projectid = dbo.superintendantsprojects.projectid AND " & _
+                            "dbo.iresults.inspectiondate = dbo.superintendantsprojects.inspectiondate INNER JOIN " & _
+                            "dbo.people ON dbo.superintendantsprojects.peopleid = dbo.people.peopleid INNER JOIN " & _
+                            "dbo.people people_1 ON dbo.iresults.ins_peopleid = people_1.peopleid INNER JOIN " & _
+                            "dbo.inspectionreports ON dbo.iresults.iresultsid = dbo.inspectionreports.iresultsid AND " & _
+                            "dbo.iresults.projectid = dbo.inspectionreports.projectid INNER JOIN " & _
+                            "dbo.documents ON dbo.inspectionreports.documentid = dbo.documents.documentid AND " & _
+                            "dbo.inspectionreports.projectid = dbo.documents.projectid " & _
+                        "WHERE (dbo.documents.documentid = @docid)"
+
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.Parameters.Add("@docid", docid)    ' added by Joe Dela Cruz
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        Finally         ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Signoff "
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:                          
+    '   Event:  function to check if developer requires photo followup
+    '************************************************************************
+
+    <WebMethod()> Public Function iv_checkfollowup(ByVal devid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim result As String
+        Dim sqlstmt As String
+        sqlstmt = "SELECT photo FROM buildersco " & _
+                        "WHERE companyid = @devid"
+
+        Try
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+            cmd.Parameters.Add("@devid", devid)
+            cmd.CommandType = CommandType.Text
+
+            If SqlConn.State = ConnectionState.Closed Then
+                SqlConn.Open()
+            End If
+
+            result = CStr(cmd.ExecuteScalar)
+
+            Return result
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '   Programmer:  Patricia Kline                            
+    '   Created Date: 1/11/03                                 
+    '   Modified Date:                                         
+    '   Event:  Get inspectors for specific company
+    '*******************************************************************************
+
+    <WebMethod()> Public Function Get_Inspectors(ByVal companyid As Integer) As DataSet
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim ds As New DataSet()
+        Dim sqlstmt As String
+        sqlstmt = "SELECT p.peopleid, fname + ' ' + lname AS name, i.initials " & _
+                    "FROM dbo.people p LEFT OUTER JOIN " & _
+                        "dbo.inspectors i ON p.peopleid = i.peopleid " & _
+                    "WHERE companyid = " & companyid & " " & _
+                    "ORDER BY fname ASC"
+
+        Try
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:                          
+    '   Event:  function to insert or update inspectors info
+    '************************************************************************
+
+    <WebMethod()> Public Function add_inspectors(ByVal pplid As Integer, ByVal initials As String) As String
+
+        Try
+            Dim SqlConn As New SqlConnection(strConn)
+            Dim sqlDr As SqlDataReader
+            Dim cnt As Integer = Nothing
+
+            Dim sqlCmd As New SqlCommand("SELECT count(*) FROM inspectors " & _
+                                        "WHERE peopleid = " & pplid, SqlConn)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlDr = sqlCmd.ExecuteReader
+            While sqlDr.Read
+                cnt = sqlDr.GetInt32(0)
+            End While
+            SqlConn.Close()
+
+            If cnt = 0 Then
+                Dim sqlstmt As String
+                sqlstmt = LCase("INSERT INTO inspectors (peopleid, initials) " & _
+                    "VALUES (" & pplid & ", '" & initials & "')")
+                Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+                cmd.CommandType = CommandType.Text
+                SqlConn.Open()
+                sqlDr = cmd.ExecuteReader
+                SqlConn.Close()
+            Else
+                Dim sqlstmt As String
+                sqlstmt = LCase("UPDATE inspectors SET initials = '" & initials & "' " & _
+                    "WHERE peopleid = " & pplid)
+                Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+                cmd.CommandType = CommandType.Text
+                SqlConn.Open()
+                sqlDr = cmd.ExecuteReader
+                SqlConn.Close()
+            End If
+
+            Return "true"
+
+        Catch ex As SqlException
+            SqlConn.Close()
+            Return ex.Message
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '  Programmer:  Patricia Kline
+    '  Created Date: 10/04/02                       
+    '  Event: Get project path for project
+    '*******************************************************************************
+
+    <WebMethod()> Public Function getProjectPath(ByVal projid As Integer) As String
+
+        Try
+            Dim SqlConn As New SqlConnection(strConn)
+            Dim SqlCmd As New SqlCommand("SELECT buildersco.directory AS copath, projects.directory AS projpath " & _
+                    "FROM buildersco INNER JOIN companies ON buildersco.companyid = companies.companyid INNER JOIN projects ON buildersco.companyid = projects.companyid " & _
+                    "WHERE projects.projectid = " & projid, SqlConn)
+            Dim sqlDr As SqlDataReader
+            Dim a As String
+
+            SqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlDr = SqlCmd.ExecuteReader
+
+            While sqlDr.Read
+                a = sqlDr.GetValue(0).ToString & "/" & sqlDr.GetValue(1).ToString
+            End While
+
+            Return a
+
+        Catch ex As SqlException
+            Return "ERROR" & ex.Number & "^" & ex.Message
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: John Ashbaugh                              Date:  8/27/02                 
+    '   Event: UPLOAD BYTE FILE
+    '   Modified By: Patricia Kline                            Date: 11/21/02
+    '   Changed: Return String instead of boolean for error msg 
+    '************************************************************************
+
+    <WebMethod()> Public Function UploadFile(ByVal fs() As Byte, ByVal folder As String, ByVal devpath As String, ByVal FlName As String) As String
+
+        Dim dir As System.IO.Directory
+        Dim file As String = "c:\vcnet\vcnservice\iphotos\" & devpath & "\" & folder
+
+        'create directory if doesnt already exist
+        If dir.Exists(file) = False Then
+            dir.CreateDirectory(file)
+        End If
+
+        'appends filename
+        file = file & "\" & FlName
+
+        Try
+            Dim m As New System.IO.MemoryStream(fs)
+            Dim f As New System.IO.FileStream(file, IO.FileMode.OpenOrCreate)
+            m.WriteTo(f)
+            m.Close()
+            f.Close()
+            f = Nothing
+            m = Nothing
+
+            Return "True"
+
+        Catch ex As Exception
+            Return Err.Number & "^" & Err.Description
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '  Programmer:  Patricia Kline
+    '  Created Date: 10/04/02                       
+    '  Event: Get followup info for id
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetFollowup(ByVal projid As Integer, ByVal refid As String) As String()
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        Dim cnt As Integer
+        Dim result() As String
+        Dim item As String
+
+        If Len(refid) < 9 Then
+            item = refid & "02"
+        Else
+            item = Microsoft.VisualBasic.Left(refid, Len(refid) - 1) & "2"
+        End If
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "SELECT count(*) FROM iresults " & _
+                "WHERE projectid = " & projid & " " & _
+                "AND iresultsid = '" & item & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                ReDim result(0)
+                result(0) = "None"
+            ElseIf cnt = 1 Then
+                Dim dr As SqlClient.SqlDataReader
+                ReDim result(2)
+
+                sqlstmt = "SELECT CONVERT(varchar(10), dbo.iresults.ins_peopleid) + '^' + dbo.inspectors.initials, comment, inspectiondate " & _
+                                "FROM dbo.iresults INNER JOIN " & _
+                                    "dbo.inspectors ON dbo.iresults.ins_peopleid = dbo.inspectors.peopleid " & _
+                                "WHERE projectid = " & projid & " " & _
+                                "AND iresultsid = '" & item & "' "
+
+                Dim sqlCmd2 As New SqlCommand(LCase(sqlstmt), SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+
+                dr = sqlCmd2.ExecuteReader
+
+                While dr.Read
+                    result(0) = dr.GetValue(0).ToString
+                    result(1) = dr.GetValue(1).ToString
+                    result(2) = dr.GetValue(2).ToString
+                End While
+            Else
+                ReDim result(2)
+                result(0) = "Error"
+                result(1) = "2827"
+                result(2) = "Primary key violation"
+            End If
+
+            Return result
+
+        Catch ex As SqlException
+            ReDim result(2)
+            result(0) = "Error"
+            result(1) = CStr(ex.Number)
+            result(2) = ex.Message
+
+            Return result
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '  Programmer:  Patricia Kline
+    '  Created Date: 10/04/02                       
+    '  Event: Add super for date
+    '*******************************************************************************
+
+    <WebMethod()> Public Function FollowupPhotoRecd(ByVal projid As Integer, ByVal iresultsid As String) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        Dim cnt As Integer
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "SELECT count(*) FROM inspectionreportfollowups " & _
+                "WHERE projectid = " & projid & " " & _
+                "AND iresultsid = '" & iresultsid & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO inspectionreportfollowups (projectid, iresultsid, photo, recd) " & _
+                            "VALUES (" & projid & ", '" & iresultsid & "', 1, 1) "
+                Dim sqlCmd2 As New SqlCommand(LCase(sqlstmt), SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            Else
+                sqlstmt = "UPDATE inspectionreportfollowups " & _
+                                "SET photo = 1, recd = 1 " & _
+                                "WHERE projectid = " & projid & " " & _
+                                "AND iresultsid = '" & iresultsid & "'"
+                Dim sqlCmd2 As New SqlCommand(LCase(sqlstmt), SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '  Programmer:  Patricia Kline
+    '  Created Date: 10/04/02                       
+    '  Event: Add super for date
+    '*******************************************************************************
+
+    <WebMethod()> Public Function FollowupRecd(ByVal projid As Integer, ByVal iresultsid As String) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        Dim cnt As Integer
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "SELECT count(*) FROM inspectionreportfollowups " & _
+                "WHERE projectid = " & projid & " " & _
+                "AND iresultsid = '" & iresultsid & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO inspectionreportfollowups (projectid, iresultsid, photo) " & _
+                            "VALUES (" & projid & ", '" & iresultsid & "', 1) "
+                Dim sqlCmd2 As New SqlCommand(LCase(sqlstmt), SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            Else
+                sqlstmt = "UPDATE inspectionreportfollowups " & _
+                                "SET recd = 1 " & _
+                                "WHERE projectid = " & projid & " " & _
+                                "AND iresultsid = '" & iresultsid & "'"
+                Dim sqlCmd2 As New SqlCommand(LCase(sqlstmt), SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '  Programmer:  Patricia Kline
+    '  Created Date: 10/04/02                       
+    '  Event: Add super for date
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddSuper(ByVal projid As Integer, ByVal idate As Date) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        Dim cnt As Integer
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "SELECT count(*) FROM superintendantsprojects " & _
+                "WHERE projectid = " & projid & " " & _
+                "AND inspectiondate = '" & idate & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO superintendantsprojects (projectid, inspectiondate, peopleid) " & _
+                            "SELECT projectid, '" & idate & "', peopleid FROM superintendantsprojects " & _
+                                    "WHERE projectid = " & projid & " " & _
+                                    "AND inspectiondate in (SELECT max(inspectiondate) FROM superintendantsprojects " & _
+                                    "WHERE projectid = " & projid & " " & _
+                                    "AND inspectiondate <  '" & idate & "')"
+
+                Dim sqlCmd2 As New SqlCommand(LCase(sqlstmt), SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '  Programmer:  Patricia Kline
+    '  Created Date: 10/04/02                       
+    '  Event: Add followup info for id
+    '*******************************************************************************
+
+    <WebMethod()> Public Function AddFollowup(ByVal projid As Integer, ByVal refid As String, ByVal inspector As Integer, ByVal comment As String, ByVal idate As Date) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        Dim cnt As Integer
+        Dim item As String
+
+        If Len(refid) < 9 Then
+            item = refid & "02"
+        Else
+            item = Microsoft.VisualBasic.Left(refid, Len(refid) - 1) & "2"
+        End If
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "SELECT count(*) FROM iresults " & _
+                "WHERE projectid = " & projid & " " & _
+                "AND iresultsid = '" & item & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO iresults (projectid, iresultsid, sub_companyid, code, " & _
+                                    "locationname, ins_peopleid, ire_projectid, ire_iresultsid, " & _
+                                    "lot, bldg, unit, phase, comment, approved, inspectiondate, " & _
+                                    "plantype) " & _
+                            "SELECT projectid, '" & item & "', sub_companyid, Replace(code, '.99', '.98'), " & _
+                                    "locationname, " & inspector & ", projectid, '" & refid & "', " & _
+                                    "lot, bldg, unit, phase, '" & comment & "', 1, '" & idate & "', " & _
+                                    "plantype " & _
+                                "FROM iresults " & _
+                                "WHERE projectid = " & projid & " AND iresultsid = '" & refid & "' "
+
+                Dim sqlCmd2 As New SqlCommand(LCase(sqlstmt), SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            Else
+                sqlstmt = "UPDATE iresults " & _
+                            "SET ins_peopleid = " & inspector & ", " & _
+                                    "comment = '" & comment & "', " & _
+                                    "inspectiondate = '" & idate & "' " & _
+                            "WHERE projectid = " & projid & " AND iresultsid = '" & item & "' "
+
+                Dim sqlCmd2 As New SqlCommand(LCase(sqlstmt), SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    <WebMethod()> Public Function AddFollowupPhoto(ByVal projid As Integer, ByVal refid As String, ByVal photo As String) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        Dim cnt As Integer
+        Dim item As String
+
+        If Len(refid) < 9 Then
+            item = refid & "02"
+        Else
+            item = Microsoft.VisualBasic.Left(refid, Len(refid) - 1) & "2"
+        End If
+
+        Try
+            SqlConn.Open()
+            sqlstmt = "SELECT count(*) FROM inspectionphotos " & _
+                "WHERE projectid = " & projid & " " & _
+                "AND iresultsid = '" & item & "'"
+
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd1.CommandType = CommandType.Text
+            cnt = CInt(sqlCmd1.ExecuteScalar.ToString)
+
+            If cnt = 0 Then
+                sqlstmt = "INSERT INTO inspectionphotos (projectid, iresultsid, photofilename) " & _
+                            "VALUES (" & projid & ", '" & item & "', '" & photo & "')"
+
+                Dim sqlCmd2 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd2.CommandType = CommandType.Text
+                sqlCmd2.ExecuteNonQuery()
+            End If
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:  6/25/03 by Joe Dela Cruz                        
+    '   Event: signoff sir item(s)
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_signoff(ByVal docid As Integer, ByVal item As String, ByVal sdate As Date, ByVal pplid As Integer) As String
+
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)
+
+        If item = "(all)" Then
+            ' Next line modified by Joe Dela Cruz
+            sqlstmt = "UPDATE inspectionreportdetails " & _
+                        "SET sdate = @sdate, " & _
+                            "peopleid = @pplid " & _
+                        "WHERE documentid = @docid"
+        Else
+            ' Next line modified by Joe Dela Cruz
+            sqlstmt = "UPDATE inspectionreportdetails " & _
+                            "SET sdate = @sdate, " & _
+                                "peopleid = @pplid " & _
+                            "WHERE documentid = @docid AND iresultsid = @item "
+        End If
+
+        Try
+            Dim sqlCmd As New SqlCommand(LCase(sqlstmt), SqlConn)
+            sqlCmd.Parameters.Add("@docid", docid)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@sdate", sdate)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@item", item)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date: 6/25/03 by Joe Dela Cruz                         
+    '   Event: send all sir items in dataset for selected sirnbr to vcnet
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_getitems(ByVal docid As Integer) As DataSet
+
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)   ' moved of Try by Joe Dela Cruz
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "SELECT iresultsid, sdate " & _
+                    "FROM inspectionreportdetails " & _
+                    "WHERE documentid = @docid " & _
+                    "ORDER BY iresultsid"
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+
+            cmd.Parameters.Add("@docid", docid)    ' added by Joe Dela Cruz
+            cmd.CommandType = CommandType.Text
+
+            Dim da As New SqlDataAdapter(cmd)
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+
+        Finally         ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " SIR List "
+
+    '*******************************************************************************
+    '   Programmer:  Patricia Kline
+    '   Created Date: 12/29/03                                                      
+    '   Event:  Get all divisions for company
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetCompanyDivisions(ByVal coid As Integer) As DataSet
+
+        Dim strSQL As String
+        strSQL = "SELECT division, divisiondesc " & _
+                "FROM divisions " & _
+                 "WHERE companyid = @coid"
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim ds As New DataSet()
+        Try
+            Dim cmd As New SqlCommand(strSQL, SqlConn)
+            cmd.CommandType = CommandType.Text
+            cmd.Parameters.Add("@coid", coid)
+            Dim da As New SqlDataAdapter(cmd)
+            da.Fill(ds)
+            Return ds
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '*******************************************************************************
+    '   Programmer:  Patricia Kline
+    '   Created Date: 12/29/03                                                      
+    '   Event:  Get all divisions for company
+    '*******************************************************************************
+
+    <WebMethod()> Public Function GetSIRList(ByVal coid As Integer, ByVal division As String, ByVal startdate As Date, ByVal enddate As Date) As DataSet
+
+        Dim strSQL As String
+        strSQL = "SELECT  companies.name AS coname, projects.name AS projname, documents.docfilename " & _
+                    "FROM documents INNER JOIN " & _
+                        "projects ON documents.projectid = projects.projectid INNER JOIN " & _
+                        "companies ON projects.companyid = companies.companyid " & _
+                    "WHERE documents.documentcategory = 'inspection report' " & _
+                    "AND documents.projectid IN (SELECT projectid FROM projectstodivisions " & _
+                        "WHERE companyid = @coid AND division = @division) " & _
+                    "AND documents.updatedate BETWEEN @startdate AND @enddate"
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim ds As New DataSet()
+
+        Try
+            Dim cmd As New SqlCommand(strSQL, SqlConn)
+            cmd.CommandType = CommandType.Text
+            cmd.Parameters.Add("@coid", coid)
+            cmd.Parameters.Add("@division", division)
+            cmd.Parameters.Add("@startdate", startdate)
+            cmd.Parameters.Add("@enddate", enddate)
+            Dim da As New SqlDataAdapter(cmd)
+            da.Fill(ds)
+            Return ds
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#End Region
+
+#Region " Reports "
+
+    '*******************************************************************************
+    ' Programmer:  Patricia Kline
+    ' Created Date:  1/12/04                                               
+    ' Event: Get division analysis data
+    '*******************************************************************************
+
+    <WebMethod()> Public Function Get_DivAnalysis() As DataSet
+
+        Dim sqlstmt As String
+        Dim ds As New DataSet()
+        Dim SqlConn As New SqlConnection(strConnIV)
+        Dim dayofmonth As Integer = -Today.Day
+        Dim startdate As Date = DateAdd(DateInterval.Month, -2, Today)
+        startdate = DateAdd(DateInterval.Day, dayofmonth + 1, startdate)
+
+        Try
+            sqlstmt = "SELECT CONVERT(smalldatetime, CONVERT(varchar(2), MONTH(dbo.timesheetitems.[date])) + '/1/' + CONVERT(varchar(4), YEAR(dbo.timesheetitems.[date]))) " & _
+                            "AS Month, dbo.employees.office, dbo.activities.category, SUM(dbo.timesheetitems.hours) AS ttlhours " & _
+                        "FROM timesheetitems INNER JOIN " & _
+                            "employees ON timesheetitems.screenname = employees.screenname INNER JOIN " & _
+                            "activities ON timesheetitems.activity = activities.description " & _
+                        "WHERE employees.[position] = 'Inspector' AND timesheetitems.[date] >= '" & startdate & "' " & _
+                        "GROUP BY CONVERT(smalldatetime, CONVERT(varchar(2), MONTH(dbo.timesheetitems.[date])) + '/1/' + CONVERT(varchar(4), YEAR(dbo.timesheetitems.[date]))), employees.office, activities.category"
+
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds, "table1")
+
+        Catch ex As SqlException
+            Throw ex
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+        Try
+            sqlstmt = "SELECT DISTINCT CONVERT(smalldatetime, CONVERT(varchar(2), MONTH(dbo.timesheets.[date])) + '/1/' + CONVERT(varchar(4), YEAR(dbo.timesheets.[date]))) AS Month, " & _
+                            "dbo.employees.office, COUNT('dbo.timesheets.*') AS cnt " & _
+                        "FROM dbo.employees INNER JOIN " & _
+                            "dbo.timesheets ON dbo.employees.screenname = dbo.timesheets.screenname " & _
+                        "WHERE (dbo.employees.[position] = 'Inspector') AND (dbo.timesheets.[date] >= '" & startdate & "' " & _
+                        "AND (DATEPART(dw, dbo.timesheets.[date]) IN (2, 3, 4, 5, 6))) " & _
+                        "AND dbo.timesheets.submitted = 1 " & _
+                        "GROUP BY CONVERT(smalldatetime, CONVERT(varchar(2), MONTH(dbo.timesheets.[date])) + '/1/' + CONVERT(varchar(4), YEAR(dbo.timesheets.[date]))),  " & _
+                            "dbo.employees.office"
+
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds, "table2")
+
+        Catch ex As SqlException
+            Throw ex
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+        Try
+            sqlstmt = "SELECT CONVERT(smalldatetime, CONVERT(varchar(2), MONTH(dbo.timesheetitems.[date])) + '/1/' + CONVERT(varchar(4), YEAR(dbo.timesheetitems.[date]))) " & _
+                            "AS Month, dbo.employees.office, SUM(dbo.timesheetitems.hours) AS ttlhours " & _
+                        "FROM timesheetitems INNER JOIN " & _
+                            "employees ON timesheetitems.screenname = employees.screenname INNER JOIN " & _
+                            "activities ON timesheetitems.activity = activities.description " & _
+                        "WHERE employees.[position] = 'Inspector' AND timesheetitems.[date] >= '" & startdate & "' " & _
+                        "AND activities.category = 'Other' " & _
+                        "GROUP BY CONVERT(smalldatetime, CONVERT(varchar(2), MONTH(dbo.timesheetitems.[date])) + '/1/' + CONVERT(varchar(4), YEAR(dbo.timesheetitems.[date]))), employees.office "
+
+            Dim Sqlcmd As New SqlCommand(sqlstmt, SqlConn)
+            Dim da As New SqlDataAdapter(Sqlcmd)
+            Sqlcmd.CommandType = CommandType.Text
+
+            da.Fill(ds, "table3")
+            Return ds
+
+        Catch ex As SqlException
+            Throw ex
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+    End Function
+
+#End Region
+
+#Region " Management "
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date: 6/25/03 by Joe Dela Cruz                         
+    '   Event: add reminder to sirmgmt
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_addmgmt(ByVal companyid As Integer, ByVal rto As String, ByVal days As Integer, ByVal method As String, ByVal rtext As String) As String
+
+        rto = Replace(rto, "'", "''")     ' added by Joe Dela Cruz
+        method = Replace(method, "'", "''")     ' added by Joe Dela Cruz
+        rtext = Replace(rtext, "'", "''")     ' added by Joe Dela Cruz
+        Dim sqlstmt As String
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "SELECT max(remindernbr) FROM sirmgmt " & _
+            "WHERE companyid = @companyid"
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim reminder As Integer = 0
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            SqlCmd.Parameters.Add("@companyid", companyid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            reminder = CInt(sqlCmd.ExecuteScalar)
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+        reminder += 1
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = LCase("INSERT INTO sirmgmt (companyid, remindernbr, reminderto,  dayinterval, deliverymethod, remindertext) " & _
+                "VALUES (@companyid,@reminder,@rto,@days,@method,@rtext)")
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.CommandType = CommandType.Text
+            SqlCmd.Parameters.Add("@companyid", companyid)    ' added by Joe Dela Cruz
+            SqlCmd.Parameters.Add("@reminder", reminder)    ' added by Joe Dela Cruz
+            SqlCmd.Parameters.Add("@rto", rto)    ' added by Joe Dela Cruz
+            SqlCmd.Parameters.Add("@days", days)    ' added by Joe Dela Cruz
+            SqlCmd.Parameters.Add("@method", method)    ' added by Joe Dela Cruz
+            SqlCmd.Parameters.Add("@rtext", rtext)    ' added by Joe Dela Cruz
+            SqlConn.Open()
+            SqlCmd.ExecuteNonQuery()        ' added by Joe Dela Cruz       
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:                          
+    '   Event: update sir reminders with new values set by user
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_editmgmt(ByVal coid As Integer, ByVal remindnbr As Integer, ByVal rto As String, ByVal days As Integer, ByVal method As String, ByVal rtext As String) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        sqlstmt = LCase("UPDATE sirmgmt SET reminderto = '" & rto & "', dayinterval ='" & days & "', " & _
+                        "deliverymethod = '" & method & "', remindertext= '" & rtext & "' " & _
+                "WHERE companyid = " & coid & " AND remindernbr = " & remindnbr)
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                       
+    '   Event:  check if person is in db and if not, add sir notifcation
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_addnotification(ByVal pplid As Integer, ByVal projid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim cnt As Integer = 0
+        Dim email As String
+        Dim result As String
+
+        Dim sqlstmt As String
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "SELECT count(*) FROM sirnotifications " & _
+                        "WHERE peopleid = @pplid " & _
+                        "AND projectid = @projid"
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@projid", projid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            cnt = CInt(sqlCmd.ExecuteScalar)
+
+            If cnt = 0 Then
+                ' Next line modified by Joe Dela Cruz
+                sqlstmt = "SELECT email FROM people " & _
+                    "WHERE peopleid = @pplid"
+                Dim sqlCmd1 As New SqlCommand(sqlstmt, SqlConn)
+                sqlCmd1.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+                sqlCmd1.CommandType = CommandType.Text
+
+                If LCase(sqlCmd1.ExecuteScalar.GetType.ToString) = "system.dbnull" Then
+                    email = ""
+                Else
+                    email = CStr(sqlCmd1.ExecuteScalar)
+                End If
+
+                If email <> "" Then
+                    ' Next line modified by Joe Dela Cruz
+                    sqlstmt = "INSERT INTO sirnotifications (peopleid, projectid)  " & _
+                                            "VALUES (@pplid,@projid)"
+                    Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+                    cmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+                    cmd.Parameters.Add("@projid", projid)    ' added by Joe Dela Cruz
+                    cmd.CommandType = CommandType.Text
+                    cmd.ExecuteNonQuery()
+                    result = "True"
+                Else
+                    result = "NoEmail"
+                End If
+            Else
+                result = "dup"
+            End If
+
+            Return result
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:                          
+    '   Event:  delete sir notifcation
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_deletenotification(ByVal pplid As Integer, ByVal projid As Integer) As String
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        sqlstmt = "DELETE sirnotifications " & _
+                    "WHERE peopleid = " & pplid & " " & _
+                    "AND projectid = " & projid
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+            cmd.CommandType = CommandType.Text
+            cmd.ExecuteNonQuery()
+            SqlConn.Close()
+
+            Return "True"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                       
+    '   Event: get dataset of sir reminders
+    '************************************************************************
+
+    <WebMethod()> Public Function sir_getmgmt(ByVal companyid As Integer) As DataSet
+
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)   ' moved out of Try by Joe Dela Cruz
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "SELECT remindernbr, reminderto, dayinterval, deliverymethod, remindertext " & _
+                    "FROM sirmgmt " & _
+                    "WHERE companyid = @companyid"
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+            cmd.Parameters.Add("@companyid", companyid)    ' added by Joe Dela Cruz
+            cmd.CommandType = CommandType.Text
+            Dim da As New SqlDataAdapter(cmd)
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            ' moved SqlConn.Close() into Finally below
+
+        Finally         ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+#Region " Messages "
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:  6/25/03 by Joe Dela Cruz                       
+    '   Event: add new contact for user
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_addcontact(ByVal pplid As Integer, ByVal contactid As Integer, ByVal group As String) As String
+
+        group = Replace(group, "'", "''")       ' added by Joe Dela Cruz
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)
+
+        ' Next line modified by Joe Dela Curz
+        sqlstmt = LCase("INSERT INTO addressbook (peopleid, contactid, groupname) " & _
+                        "VALUES (@pplid,@contactid,@group)")
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@pplid", pplid)              ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@contactid", contactid)      ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@group", group)              ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()            ' added by Joe Dela Cruz
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:  6/25/03 by Joe Dela Cruz                         
+    '   Event: add new folder for user
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_addfolder(ByVal pplid As Integer, ByVal folder As String) As String
+
+        folder = Replace(folder, "'", "''")
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        ' Next line modified by JOe Dela Cruz
+        sqlstmt = LCase("INSERT INTO folders (peopleid, folder) " & _
+                        "VALUES (@pplid,@folder)")
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@pplid", pplid)              ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@folder", folder)      ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: Patricia Kline             
+    '   Created Date:  12/1/02                 
+    '   Modified Date:                          
+    '   Event:  function to insert new msg into database 
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_addmsg(ByVal coid As Integer, ByVal pplfrom As Integer, ByVal pplto As String, ByVal groupto As String, ByVal subject As String, ByVal Msg As String, ByVal status As Integer) As String
+
+        Msg = Replace(Msg, "'", "")
+        subject = Replace(subject, "'", "")
+        ' Next 2 lines added by Joe Dela Cruz
+        pplto = Replace(pplto, "'", "''")
+        groupto = Replace(groupto, "'", "''")
+
+        Dim msgincr As Integer
+        Dim sqlConn2 As New SqlConnection(strConn)
+        Dim strMsgIncr As String
+        Dim result As String
+        Dim sqlstmt As String
+
+        'need to figure out auto id # for inserting of msgs
+        Try
+            ' Next line modified by Joe Dela Cruz
+            sqlstmt = "SELECT MAX(msgid) FROM messages " & _
+                "WHERE msgsource = @coid " & _
+                "AND msgfrom = @pplfrom"
+
+            Dim sqlCmd As New SqlCommand(sqlstmt, sqlConn2)
+
+            SqlCmd.Parameters.Add("@coid", coid)        ' added by Joe Dela Cruz
+            SqlCmd.Parameters.Add("@pplfrom", pplfrom)  ' added by Joe Dela Cruz
+            sqlConn2.Open()
+            If LCase(sqlCmd.ExecuteScalar().GetType.tostring) <> "system.dbnull" Then
+                msgincr = CInt(sqlCmd.ExecuteScalar())
+            End If
+
+        Catch ex As SqlException
+            result = "Error^" & ex.Message & ex.Number.ToString
+            Return result
+
+        Finally
+            If Not sqlConn2.State = ConnectionState.Closed Then
+                sqlConn2.Close()
+            End If
+
+        End Try
+
+        msgincr += 1
+
+        Try
+            Dim sqlCmd As New SqlCommand(LCase("INSERT INTO messages (msgid, msgfrom, msgsource, msg, status, subject) " & _
+                                                "VALUES (@msgincr, @pplfrom, @coid, @Msg, @status, @subject)"), sqlConn2)
+
+            sqlCmd.Parameters.Add("@msgincr", msgincr)
+            sqlCmd.Parameters.Add("@pplfrom", pplfrom)
+            sqlCmd.Parameters.Add("@coid", coid)
+            sqlCmd.Parameters.Add("@Msg", Msg)
+            sqlCmd.Parameters.Add("@status", status)
+            sqlCmd.Parameters.Add("@subject", subject)
+
+            If Not sqlConn2.State = ConnectionState.Open Then
+                sqlConn2.Open()
+            End If
+
+            sqlCmd.ExecuteNonQuery()
+
+        Catch ex As SqlException
+            result = "Error^" & ex.Message & ex.Number.ToString
+            Return result
+
+        Finally
+            If Not sqlConn2.State = ConnectionState.Closed Then
+                sqlConn2.Close()
+            End If
+
+        End Try
+
+        Dim where As String
+
+        sqlstmt = "INSERT INTO messagestousers (msgid, msgfrom, msgsource, msgto, msgfolder) " & _
+                                        "SELECT @msgincr, @pplfrom, @coid, peopleid, 'inbox' FROM people "
+
+        If pplto <> "" Then
+            where = "WHERE peopleid in (@pplto)"
+        End If
+
+        If groupto <> "" Then
+            If where = "" Then
+                where = "WHERE peopleid in (SELECT contactid FROM addressbook " & _
+                    "WHERE peopleid = @pplfrom AND groupname in (@groupto))"
+            Else
+                where = where & " OR peopleid in (SELECT contactid FROM addressbook " & _
+                    "WHERE peopleid = @pplfrom AND groupname in (@groupto))"
+            End If
+        End If
+
+        sqlstmt = sqlstmt & where
+
+        Try
+            Dim sqlCmd1 As New SqlCommand(sqlstmt, sqlConn2)
+            sqlCmd1.Parameters.Add("@pplfrom", pplfrom)
+            sqlCmd1.Parameters.Add("@msgincr", msgincr)
+            sqlCmd1.Parameters.Add("@coid", coid)
+
+            If pplto <> "" Then
+                sqlCmd1.Parameters.Add("@pplto", pplto)
+            End If
+
+            If groupto <> "" Then
+                sqlCmd1.Parameters.Add("@groupto", groupto)
+            End If
+
+            If Not sqlConn2.State = ConnectionState.Open Then
+                sqlConn2.Open()
+            End If
+
+            sqlCmd1.ExecuteNonQuery()
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return "Error^" & ex.Message & ex.Number.ToString
+
+        Finally
+            If Not sqlConn2.State = ConnectionState.Closed Then
+                sqlConn2.Close()
+            End If
+
+        End Try
+
+        Try
+            Dim sqlCmd1 As New SqlCommand("INSERT INTO messagestousers (msgid, msgfrom, msgsource, msgto, msgfolder) " & _
+                "VALUES (@msgincr, @pplfrom ,@coid, @pplfrom,'sent items')", sqlConn2)
+
+            sqlCmd1.Parameters.Add("@pplfrom", pplfrom)
+            sqlCmd1.Parameters.Add("@msgincr", msgincr)
+            sqlCmd1.Parameters.Add("@pplto", pplto)
+            sqlCmd1.Parameters.Add("@coid", coid)
+            If Not sqlConn2.State = ConnectionState.Open Then
+                sqlConn2.Open()
+            End If
+
+            sqlCmd1.ExecuteNonQuery()
+
+        Catch ex As SqlException
+            result = "Error^" & ex.Message & ex.Number.ToString
+            Return result
+
+        Finally
+            If Not sqlConn2.State = ConnectionState.Closed Then
+                sqlConn2.Close()
+            End If
+
+        End Try
+
+        Return "True"
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date: 6/25/03 by Joe Dela Cruz                       
+    '   Event: delete new contact for user
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_delcontact(ByVal pplid As Integer, ByVal contactid As Integer, ByVal group As String) As String
+
+        group = Replace(group, "'", "''")       ' added by Joe Dela Cruz
+
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)
+
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "DELETE addressbook " & _
+                    "WHERE peopleid = @pplid " & _
+                    "AND contactid = @contactid " & _
+                    "AND groupname = @group "
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@pplid", pplid)  ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@contactid", contactid)        ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@group", group)  ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()        ' added by Joe Dela Cruz            
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date: 6/25/03 by Joe Dela Cruz                         
+    '   Event: update message folder for user
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_delete(ByVal id As Integer, ByVal from As Integer, ByVal source As Integer, ByVal mto As Integer) As String
+
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)
+
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "UPDATE messagestousers SET isdeleted = 1 " & _
+                    "WHERE msgid = @id " & _
+                    "AND msgfrom = @from " & _
+                    "AND msgsource = @source " & _
+                    "AND msgto = @mto"
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@id", id)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@from", from)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@source", source)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@mto", mto)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()    ' added by Joe Dela Cruz
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:  6/25/03 by Joe Dela Cruz                        
+    '   Event: list of people in address book for user
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_getaddrbook(ByVal pplid As Integer, ByVal group As String) As DataSet
+
+        group = Replace(group, "'", "''")   ' added by Joe Dela Cruz
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)   ' moved out of Try by Joe Dela Cruz
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "SELECT peopleid, fname + ' ' + lname AS name FROM people " & _
+                "WHERE peopleid in (SELECT contactid FROM addressbook " & _
+                    "WHERE groupname = @group AND peopleid = @pplid)"
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+
+            cmd.Parameters.Add("@group", group)    ' added by Joe Dela Cruz
+            cmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            cmd.CommandType = CommandType.Text
+            Dim da As New SqlDataAdapter(cmd)
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            ' Moved SqlConn.close to Finally below
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date: 6/25/03 by Joe Dela Cruz                         
+    '   Event: list of people not in address book for user
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_getavailcontacts(ByVal companyid As Integer, ByVal pplid As Integer, ByVal group As String) As DataSet
+
+        group = Replace(group, "'", "''")   ' added by Joe Dela Cruz
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)   ' Moved out of Try by Joe Dela Cruz
+        ' Next line modified by Joe Dela Cruz
+        If pplid = 1 Then
+            sqlstmt = "SELECT people.peopleid, people.fname + ' ' + people.lname AS name " & _
+                "FROM users users INNER JOIN " & _
+                "people people ON users.peopleid = people.peopleid " & _
+                "WHERE users.peopleid not in (1, @pplid) " & _
+                "AND users.peopleid not in (SELECT contactid FROM addressbook WHERE groupname = @group " & _
+                "AND peopleid = @pplid)"
+        Else
+            sqlstmt = "SELECT people.peopleid, people.fname + ' ' + people.lname AS name " & _
+                "FROM users users INNER JOIN " & _
+                "people people ON users.peopleid = people.peopleid " & _
+                "WHERE (companyid = @companyid OR accessible = 1) " & _
+                "AND users.peopleid not in (1, @pplid) " & _
+                "AND users.peopleid not in (SELECT contactid FROM addressbook WHERE groupname = @group " & _
+                "AND peopleid = @pplid)"
+        End If
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+            cmd.Parameters.Add("@companyid", companyid)    ' added by Joe Dela Cruz
+            cmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            cmd.Parameters.Add("@group", group)    ' added by Joe Dela Cruz            
+            cmd.CommandType = CommandType.Text
+            Dim da As New SqlDataAdapter(cmd)
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            ' Moved SqlConn.Close() into Finally below
+
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:  6/25/03 by Joe Dela Crux                        
+    '   Event: list of people for company 
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_getcocontacts(ByVal companyid As Integer, ByVal pplid As Integer) As DataSet
+
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)   ' moved out of Try by Joe Dela Cruz
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "SELECT people.peopleid, people.fname + ' ' + people.lname AS name " & _
+                    "FROM users users INNER JOIN " & _
+                      "people people ON users.peopleid = people.peopleid " & _
+                "WHERE companyid = @companyid " & _
+                "AND users.peopleid not in (1, @pplid)"
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+
+            cmd.Parameters.Add("@companyid", companyid)    ' added by Joe Dela Cruz
+            cmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            cmd.CommandType = CommandType.Text
+            Dim da As New SqlDataAdapter(cmd)
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            ' Moved SqlConn.Close() into Finally below
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                       
+    '   Event: list of people for company or accessible
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_getcontacts(ByVal companyid As Integer, ByVal pplid As Integer) As DataSet
+
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)   ' moved out of Try by Joe Dela Cruz
+        ' Next line modified by Joe Dela Cruz
+        If pplid = 1 Then
+            sqlstmt = "SELECT people.peopleid, people.fname + ' ' + people.lname AS name " & _
+                        "FROM users users INNER JOIN " & _
+                          "people people ON users.peopleid = people.peopleid " & _
+                    "WHERE users.peopleid not in (1, @pplid)"
+        Else
+            sqlstmt = "SELECT people.peopleid, people.fname + ' ' + people.lname AS name " & _
+                        "FROM users users INNER JOIN " & _
+                          "people people ON users.peopleid = people.peopleid " & _
+                    "WHERE (companyid = @companyid OR accessible = 1) " & _
+                    "AND users.peopleid not in (1, @pplid)"
+        End If
+
+
+        Try
+
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+            cmd.Parameters.Add("@companyid", companyid)    ' added by Joe Dela Cruz
+            cmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            cmd.CommandType = CommandType.Text
+            Dim da As New SqlDataAdapter(cmd)
+
+            da.Fill(ds)
+
+            Return ds
+
+
+        Catch ex As SqlException
+            ' moved sqlConn.close into Finally below
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:   6/25/03 by Joe Dela Cruz                       
+    '   Event: folder list for user
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_getfolders(ByVal pplid As Integer) As String()
+
+        Dim SqlConn As New SqlConnection(strConn)
+
+        Try
+            ' Next line modified by Joe Dela Cruz
+            Dim sqlCmd As New SqlCommand("SELECT count(*) FROM folders " & _
+                "WHERE peopleid = @pplid", SqlConn)
+            Dim sqlDr As SqlDataReader
+            Dim cnt As Integer = Nothing
+
+            sqlCmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            cnt = CInt(sqlCmd.ExecuteScalar)
+
+            Dim x As Integer = 0
+            Dim result(cnt - 1) As String
+
+            ' Next line modified by Joe Dela Cruz
+            Dim sqlCmd1 As New SqlCommand("SELECT folder FROM folders " & _
+                "WHERE peopleid = @pplid  ORDER BY folder", SqlConn)
+            sqlCmd1.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd1.CommandType = CommandType.Text
+            sqlDr = sqlCmd1.ExecuteReader
+
+            While sqlDr.Read
+                result(x) = sqlDr.GetValue(0).ToString
+                x = x + 1
+            End While
+            sqlDr.Close()
+
+            Return result
+
+        Catch ex As SqlException
+            Dim result(2) As String
+            result(0) = "Error"
+            result(1) = CStr(ex.Number)
+            result(2) = ex.Message
+            Return result
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date: 6/25/03 by Joe Dela Cruz                   
+    '   Event: group list for user
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_getgroups(ByVal pplid As Integer) As String()
+
+        Dim SqlConn As New SqlConnection(strConn)
+
+        Try
+            ' Next line modified by Joe Dela Cruz
+            Dim sqlCmd As New SqlCommand("SELECT count(DISTINCT groupname) FROM addressbook " & _
+                "WHERE peopleid = @pplid AND groupname <> 'addrbook'", SqlConn)
+            Dim sqlDr As SqlDataReader
+            Dim cnt As Integer = Nothing
+
+            sqlCmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            cnt = CInt(sqlCmd.ExecuteScalar)   ' added by Joe Dela Cruz         
+
+            Dim x As Integer = 0
+            Dim result(cnt - 1) As String
+            ' Next line modified by Joe Dela Cruz
+            Dim sqlCmd1 As New SqlCommand("SELECT DISTINCT groupname FROM addressbook " & _
+                "WHERE peopleid = @pplid AND groupname <> 'addrbook' ORDER BY groupname", SqlConn)
+            sqlCmd1.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            sqlCmd1.CommandType = CommandType.Text
+            sqlDr = sqlCmd1.ExecuteReader
+
+            While sqlDr.Read
+                result(x) = sqlDr.GetValue(0).ToString
+                x = x + 1
+            End While
+
+            sqlDr.Close()
+            Return result
+
+        Catch ex As SqlException
+            Dim result(2) As String
+            result(0) = "Error"
+            result(1) = CStr(ex.Number)
+            result(2) = ex.Message
+            Return result
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:  6/25/03 by Joe Dela Cruz                        
+    '   Event: get names of people that the message was to
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_getmsgto(ByVal msgid As Integer, ByVal pplfrom As Integer, ByVal source As Integer) As String()
+
+        Dim SqlConn As New SqlConnection(strConn)   ' moved out of Try by JOe Dela Cruz
+        Try
+            ' Next line modified by Joe Dela Cruz
+            Dim sqlCmd As New SqlCommand("SELECT count(*) FROM users " & _
+                    "WHERE peopleid in (SELECT msgto FROM messagestousers " & _
+                    "WHERE msgid = @msgid " & _
+                    "AND msgfrom = @pplfrom " & _
+                    "AND msgsource = @source " & _
+                    "AND (msgto <> msgfrom OR msgto = 1))", SqlConn)
+
+            Dim sqlDr As SqlDataReader
+            Dim cnt As Integer = Nothing
+
+            sqlCmd.Parameters.Add("@msgid", msgid)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@pplfrom", pplfrom)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@source", source)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            cnt = CInt(sqlCmd.ExecuteScalar)   ' added by Joe Dela Cruz                     
+
+            Dim x As Integer = 0
+            Dim result(cnt - 1) As String
+            Dim sqlCmd1 As New SqlCommand("SELECT fname + ' ' + lname as name FROM people " & _
+                    "WHERE peopleid in (SELECT msgto FROM messagestousers " & _
+                    "WHERE msgid = @msgid " & _
+                    "AND msgfrom = @pplfrom " & _
+                    "AND msgsource = @source " & _
+                    "AND (msgto <> msgfrom OR msgto = 1))", SqlConn)
+            sqlCmd1.Parameters.Add("@msgid", msgid)    ' added by Joe Dela Cruz
+            sqlCmd1.Parameters.Add("@pplfrom", pplfrom)    ' added by Joe Dela Cruz
+            sqlCmd1.Parameters.Add("@source", source)    ' added by Joe Dela Cruz
+
+            sqlCmd1.CommandType = CommandType.Text
+            sqlDr = sqlCmd1.ExecuteReader
+
+            While sqlDr.Read
+                result(x) = sqlDr.GetValue(0).ToString
+                x = x + 1
+            End While
+            sqlDr.Close()
+
+            Return result
+
+        Catch ex As SqlException
+            SqlConn.Close()
+            Dim result(1) As String
+            result(0) = "Error"
+            result(1) = ex.Number & "^" & ex.Message
+
+            Return result
+
+        Finally         ' added by Joe Dela CRuz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:  6/25/03 by Joe Dela Cruz                        
+    '   Event: list of people for company 
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_getunreadrpt(ByVal pplid As Integer) As DataSet
+
+        Dim SqlConn As New SqlConnection(strConn)   ' moved out of Try by Joe Dela Cruz
+        Dim sqlstmt As String
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "SELECT people.fname + ' ' + people.lname AS messageto, messages.msgdate, messages.subject " & _
+                    "FROM messagestousers INNER JOIN " & _
+                        "people ON messagestousers.msgto = people.peopleid INNER JOIN " & _
+                        "messages ON messagestousers.msgid = messages.msgid AND messagestousers.msgfrom = messages.msgfrom AND " & _
+                        "messagestousers.msgsource = messages.msgsource " & _
+                    "WHERE (messagestousers.isread = 0) " & _
+                    "AND messagestousers.msgto <> messagestousers.msgfrom " & _
+                    "AND messagestousers.msgto <> 1 " & _
+                    "AND messagestousers.msgfrom = @pplid"
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+
+            cmd.Parameters.Add("@pplid", pplid)    ' added by Joe Dela Cruz
+            cmd.CommandType = CommandType.Text
+            Dim da As New SqlDataAdapter(cmd)
+
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            ' moved SqlConn.Close() to Finally below
+
+        Finally         ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date: 6/25/03 by Joe Dela Cruz                         
+    '   Event: update message as read 
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_isread(ByVal id As Integer, ByVal from As Integer, ByVal source As Integer, ByVal mto As Integer) As String
+
+        Dim sqlstmt As String
+        Dim SqlConn As New SqlConnection(strConn)
+        ' Next line modified by Joe Dela Cruz
+        sqlstmt = "UPDATE messagestousers SET isread = 1 " & _
+                    "WHERE msgid = @id " & _
+                    "AND msgfrom = @from " & _
+                    "AND msgsource = @source " & _
+                    "AND msgto = @mto"
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@id", id)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@from", from)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@source", source)    ' added by Joe Dela Cruz
+            sqlCmd.Parameters.Add("@mto", mto)    ' added by Joe Dela Cruz
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally     ' added by Joe Dela Cruz
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:  6/25/03 by Joe Dela Cruz                        
+    '   Event: update message folder for user
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_updatefolder(ByVal id As Integer, ByVal from As Integer, ByVal source As Integer, ByVal mto As Integer, ByVal folder As String) As String
+
+        folder = Replace(folder, "'", "''")
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        sqlstmt = LCase("UPDATE messagestousers SET msgfolder = @folder " & _
+                    "WHERE msgid = @id " & _
+                    "AND msgfrom = @from " & _
+                    "AND msgsource = @source " & _
+                    "AND msgto = @mto")
+
+        Try
+            Dim sqlCmd As New SqlCommand(sqlstmt, SqlConn)
+            sqlCmd.Parameters.Add("@id", id)
+            sqlCmd.Parameters.Add("@from", from)
+            sqlCmd.Parameters.Add("@source", source)
+            sqlCmd.Parameters.Add("@mto", mto)
+            sqlCmd.Parameters.Add("@folder", folder)
+            sqlCmd.CommandType = CommandType.Text
+            SqlConn.Open()
+            sqlCmd.ExecuteNonQuery()
+
+            Return "true"
+
+        Catch ex As SqlException
+            Return ex.Number & "^" & ex.Message
+
+        Finally
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+    '************************************************************************
+    '   Programmer: patricia kline             
+    '   Created Date: 10/1/02                
+    '   Modified Date:                          
+    '   Event: list of messages in folder for user
+    '************************************************************************
+
+    <WebMethod()> Public Function msg_getmessages(ByVal pplid As Integer, ByVal folder As String) As DataSet
+
+        folder = Replace(folder, "'", "''")
+
+        Dim SqlConn As New SqlConnection(strConn)
+        Dim sqlstmt As String
+        sqlstmt = "SELECT messages.msgid, people.fname + ' ' + people.lname AS mfrom, messages.msgdate, messages.subject, messages.msg, " & _
+                       "messages.status, messages.msgfrom, messages.msgsource, messagestousers.msgto " & _
+                    "FROM messages INNER JOIN " & _
+                        "messagestousers ON messages.msgid = messagestousers.msgid AND messages.msgfrom = messagestousers.msgfrom AND " & _
+                        "messages.msgsource = messagestousers.msgsource INNER JOIN " & _
+                        "people ON messages.msgfrom = people.peopleid " & _
+                    "WHERE messagestousers.msgto in (1, " & pplid & ") " & _
+                    "AND msgfolder = '" & folder & "' AND messagestousers.isdeleted = 0"
+
+        Try
+            Dim ds As New DataSet()
+            Dim cmd As New SqlCommand(sqlstmt, SqlConn)
+
+            cmd.CommandType = CommandType.Text
+
+            Dim da As New SqlDataAdapter(cmd)
+            da.Fill(ds)
+            Return ds
+
+        Catch ex As SqlException
+            If SqlConn.State = ConnectionState.Open Then
+                SqlConn.Close()
+            End If
+
+        End Try
+
+    End Function
+
+#End Region
+
+End Class

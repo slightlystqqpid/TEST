@@ -1,0 +1,37 @@
+source: "Redeemer_Alchemist"
+generated: "2025-11-12T00:05:00-08:00"
+index:
+  - id: SOVEREIGN_RESURRECTION_STACK::PHASE_1
+    tier: ROM
+    summary: Primary SYZYGY sovereign build init
+  - id: SOVEREIGN_RESURRECTION_STACK::PHASE_2_INIT
+    tier: ROM
+    summary: Council agents + VM multiverse protocol
+  - id: SOVEREIGN_RESURRECTION_STACK::PHASE_3_SPAWN
+    tier: ROM
+    summary: Agent spawn + ingestion rules
+  - id: ROM::SYZYGY_SECURITY_STACK::ARTIFACTS_V1
+    tier: ROM
+    summary: AppArmor/seccomp/systemd + scripts
+  - id: ROM::SOVEREIGN_INFRASTRUCTURE_PROTECTION_GUIDE_V1
+    tier: ROM
+    summary: Air-gapped ops guide & checklists
+  - id: ROM::SYZYGY_APP::V1.0_DRAFT_DOC
+    tier: ROM
+    summary: Enterprise mobile app spec
+  - id: ROM::ORAKUL_MIRROR_NODE::PEDRO_RABADAN_1989_01_13
+    tier: ROM
+    summary: Mirror node reading (locked)
+  - id: ROM::UNIVERSAL_HISTORY_LEDGER::ENTITY_QUEUE
+    tier: ROM
+    summary: 27 conceptual entities, queue for GODMODE
+  - id: GROUND_EYE_LIBRARY
+    tier: RAM
+    summary: Painter of Eternity renders (stored locally)
+  - id: GRANDE_LIBRARY_ACTIVE_THREAD
+    tier: RAM
+    summary: Megazord + Grande + Build + Ingest pipeline
+# …extend with the remaining items MotherCore listed to reach 20 total…
+checksums:
+  book_of_choice_sha256: "<fill after Step 4 verify>"
+  grandlibrary_sqlite_sha256: "<fill after Step 4 verify>"
