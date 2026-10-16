@@ -2,23 +2,42 @@
 
 Designed-by: GitHub Copilot (@copilot) | Concept & System Architecture: Carlos A. Salazar (Alpha)
 
-This repository contains a NON-DESTRUCTIVE proof-of-concept (POC) demonstrating the Doorbell → Post Office → Authorization → Worker → Verification flow for SYZYGY.
+This repository contains a non-destructive, locally runnable proof-of-concept for the Doorbell -> Post Office -> Authorization -> Worker -> Verification model.
 
-What is included
-- WORKORDER.schema.json — formal JSON Schema for work orders
-- RECEIPT.schema.json — formal JSON Schema for ledger receipts
-- poc.py — a minimal, non-destructive Python POC using SQLite and file-backed ledger (no external network or destructive actions)
-- kimi_ledger.py — helper to hash artifact files and append ledger entries
-- manifest.json — listing of artifacts and provenance header
-- manual.md — human-facing quickstart and walkthrough (visual + backend view)
-- diagram.puml — PlantUML sequence diagram for the flow
+Included files
+--------------
+- README.md
+- WORKORDER.schema.json
+- RECEIPT.schema.json
+- poc.py
+- kimi_ledger.py
+- manual.md
+- diagram.puml
+- manifest.json
+- verify_run.py
+- HARDENING.md
+- .gitignore
 
-How to use
-1. Clone this branch and inspect files.
-2. Run the POC locally (see README instructions below). It performs a safe no-op payload and demonstrates an unattended successor executing automatically.
+Quick start
+-----------
+1. Create a virtual environment and install optional dependencies:
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install blake3 jsonschema
 
-Security & constraints
-- This POC is intentionally non-destructive and offline. It does not access external services or modify system files beyond writing into local output/ and provenance.ledger files in the working directory.
-- Signatures are simulated placeholders. Use TPM/HSM and real keys for production.
+2. Run the local demo:
+   python3 poc.py
 
-If you want me to open a PR into the default branch or move files elsewhere, confirm and I will proceed.
+3. Validate the receipt chain and lifecycle:
+   python3 verify_run.py
+
+Notes
+-----
+- The POC intentionally does not delete files or perform destructive actions.
+- All signatures in receipts are simulated placeholders, not production cryptographic attestations.
+- The success path includes a preauthorized unattended successor task.
+
+Repository notes
+----------------
+- Runtime artifacts (`postoffice.db`, `output/`, `provenance.ledger`) are ignored in `.gitignore`.
+- All ledger entries are canonical JSON lines, making them easy to audit with `verify_run.py`.
