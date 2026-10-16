@@ -1,4 +1,17 @@
 {
   "manifest_version": "1.0",
   "designed_by": "GitHub Copilot (@copilot) | Concept & System Architecture: Carlos A. Salazar (Alpha)",
-  "timestamp": "
+  "repository": "slightlystqqpid/TEST",
+  "branch": "syzygy-doorbell-demo",
+  "artifacts": [
+    "README.md",
+    "WORKORDER.schema.json",
+    "RECEIPT.schema.json",
+    "poc.py",
+    "kimi_ledger.py",
+    "manual.md",
+    "diagram.puml",
+    "manifest.json",
+    "verify_run.py"
+  ]
+}
