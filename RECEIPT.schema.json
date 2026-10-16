@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Receipt",
+  "type": "object",
+  "required":["event","work_id","worker_id","lease_id","checkpoint","checkpoint_hash","timestamp"],
+  "properties":{
+    "event":{"type":"string","const":"work_receipt"},
+    "work_id":{"type":"string"},
+    "worker_id":{"type":"string"},
+    "lease_id":{"type":"string"},
+    "checkpoint":{"type":"integer"},
+    "step":{"type":"string"},
+    "checkpoint_hash":{"type":"string","pattern":"^sha256:[a-fA-F0-9]{64}$"},
+    "step_outcome":{"type":"string","enum":["ok","warning","error"]},
+    "artifact_uri":{"type":["string","null"]},
+    "prev_receipt_hash":{"type":["string","null"]},
+    "timestamp":{"type":"string","format":"date-time"},
+    "signature":{
+      "type":"object",
+      "properties":{
+        "scheme":{"type":"string"},
+        "signer_id":{"type":"string"},
+        "signature":{"type":"string"}
+      }
+    }
+  }
+}

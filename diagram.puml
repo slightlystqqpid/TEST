@@ -1,0 +1,21 @@
+@startuml
+actor Human as H
+participant Doorbell
+participant PostOffice
+participant AuthGate
+participant Worker
+participant MemoryBridge
+participant UHL
+
+H -> Doorbell: Click Ring
+Doorbell -> PostOffice: show queue
+H -> PostOffice: Approve (preauthorize)
+PostOffice -> AuthGate: verify scope
+AuthGate -> PostOffice: allow
+Worker -> PostOffice: poll & claim lease
+Worker -> MemoryBridge: write checkpoint 1
+Worker -> MemoryBridge: write checkpoint 2
+Worker -> UHL: append receipt 1
+Worker -> UHL: append receipt 2
+UHL -> H: dashboard shows completed
+@enduml

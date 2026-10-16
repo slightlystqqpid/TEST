@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WorkOrder",
+  "type": "object",
+  "required": ["work_id","version","seq","payload_hash","created_by","created_at","status"],
+  "properties": {
+    "work_id": {"type":"string","description":"Unique work identifier (e.g. wf-YYYYMMDD-####)"},
+    "version": {"type":"integer","minimum":1},
+    "seq": {"type":"integer","minimum":0,"description":"Monotonic sequence number"},
+    "payload_hash": {"type":"string","pattern":"^sha256:[a-fA-F0-9]{64}$"},
+    "payload_uri": {"type":"string","description":"Optional internal URI for payload (kvs:// or file://)"},
+    "title": {"type":"string"},
+    "summary": {"type":"string"},
+    "scope": {
+      "type":"object",
+      "properties": {
+        "allowed_workers": {"type":"array","items":{"type":"string"}},
+        "max_effect": {"type":"string","enum":["sandbox-only","read-only","apply-tentative"]},
+        "safety_level": {"type":"string","enum":["low","medium","high"]}
+      }
+    },
+    "authorization": {
+      "type":"object",
+      "properties": {
+        "preauthorized": {"type":"boolean"},
+        "witness_id": {"type":["string","null"]},
+        "approval_required": {"type":"string","enum":["none","yes_for_protected","always_yes"]},
+        "expires_at": {"type":["string","null"]}
+      }
+    },
+    "supersedes": {"type":["string","null"]},
+    "created_by": {"type":"string"},
+    "created_at": {"type":"string","format":"date-time"},
+    "status": {"type":"string","enum":["queued","claimed","executing","paused","completed","canceled"]},
+    "metadata": {
+      "type":"object",
+      "properties": {
+        "tags": {"type":"array","items":{"type":"string"}},
+        "priority": {"type":"integer","minimum":0,"maximum":10}
+      }
+    }
+  }
+}
