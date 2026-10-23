@@ -1,0 +1,8 @@
+[project]
+name = "syzygy"
+version = "0.1.0"
+description = "Clean-room Syzygy environment foundation and layer scaffolding"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
