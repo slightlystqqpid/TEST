@@ -1,0 +1,115 @@
+{
+  "L00": {
+    "name": "Environment Foundation",
+    "parents": [],
+    "objective": "Project bootstrap, manifests, reproducible structure, validation hooks.",
+    "status": "CREATED",
+    "code_path": "syzygy/bootstrap.py",
+    "test_path": "tests/test_l00_bootstrap.py",
+    "evidence": "Source scaffold exists; no execution proof in the current GitHub tool environment."
+  },
+  "L01": {
+    "name": "Identity & Session Engine",
+    "parents": ["L00"],
+    "objective": "Identity, permissions, session continuity, and revocation controls.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/identity.py",
+    "test_path": "tests/test_l01_identity.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "L02": {
+    "name": "Memory Governance",
+    "parents": ["L00"],
+    "objective": "ROM, RAM, CACHE, ARCHIVE segregation and memory tier policy.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/memory.py",
+    "test_path": "tests/test_l02_layers.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "L03": {
+    "name": "Spatial Memory Topography",
+    "parents": ["L00"],
+    "objective": "Location hierarchy, memory cards, and cursor navigation map.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/spatial_memory.py",
+    "test_path": "tests/test_l01_l10_layers.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "L04": {
+    "name": "Federation Gateway",
+    "parents": ["L00", "L01"],
+    "objective": "Peer registration, discovery, knowledge/skill publication, local federation API.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/federation.py",
+    "test_path": "tests/test_l04_federation.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "L05": {
+    "name": "Verification & Receipts",
+    "parents": ["L00", "L04"],
+    "objective": "Integrity, provenance, functional, security, and acceptance verification.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/verification.py",
+    "test_path": "tests/test_l05_verification.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "L06": {
+    "name": "HALT Human Approval",
+    "parents": ["L00", "L05"],
+    "objective": "Protected operation approval gate using explicit credentials.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/approval.py",
+    "test_path": "tests/test_l06_halt.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "L07": {
+    "name": "Parent–Child Layer Engine",
+    "parents": ["L00", "L06"],
+    "objective": "Dependency validation and controlled child spawning rules.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/parent_child_engine.py",
+    "test_path": "tests/test_l07_parent_child.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "L08": {
+    "name": "Branch & Fork Engine",
+    "parents": ["L00", "L07"],
+    "objective": "Forking, branch management, lineage tracking, and divergence handling.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/branching.py",
+    "test_path": "tests/test_l08_branch_fork.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "L09": {
+    "name": "Multi-Agent Collaboration",
+    "parents": ["L00", "L01", "L04"],
+    "objective": "Session handoff, coordination, and agent collaboration model.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/collaboration.py",
+    "test_path": "tests/test_l09_collaboration.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "L10": {
+    "name": "Recovery & Rotation",
+    "parents": ["L00", "L02", "L03", "L05"],
+    "objective": "Rotation policies, checkpointing, recovery, and C.Y.C.L.E. handling.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/rotation.py",
+    "test_path": "tests/test_l10_rotation.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "L11": {
+    "name": "End-to-End Evaluation",
+    "parents": ["L00", "L01", "L03", "L04", "L05", "L06", "L08", "L09", "L10"],
+    "objective": "Full-system scenario orchestration and adversarial testing flow.",
+    "status": "AUTHORED",
+    "code_path": "syzygy/demo.py",
+    "test_path": "tests/test_l11_e2e.py",
+    "evidence": "Code exists; runtime verification pending."
+  },
+  "project_status": {
+    "execution_evidence": "None generated in this GitHub tool environment",
+    "verification_status": "PENDING",
+    "honesty_note": "This project is a best-effort authored scaffold for a real build, not a verified execution result."
+  }
+}
